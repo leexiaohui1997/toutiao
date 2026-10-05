@@ -126,7 +126,16 @@ export async function genOne(page: Page, task: GenTask): Promise<void> {
   });
 
   await sendPrompt(page, task.prompt);
-  await waitForGeneration(page);
+
+  // 等待 get_without_watermark 响应出现（最多 120s）
+  const start = Date.now();
+  while (noWatermarkResponses.length === 0 && Date.now() - start < 120000) {
+    await page.waitForTimeout(2000);
+  }
+  if (noWatermarkResponses.length === 0) {
+    throw new Error("等待 get_without_watermark 响应超时");
+  }
+  console.log("✓ 收到 get_without_watermark 响应");
 
   if (task.output) {
     try {
