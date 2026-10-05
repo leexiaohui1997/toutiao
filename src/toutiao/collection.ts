@@ -72,10 +72,13 @@ export async function createCollection(page: Page, name: string, coverPath: stri
 
   const fileInput = page.locator('input[type="file"][accept*="image"]');
   await fileInput.setInputFiles(absCover);
-  await page.waitForTimeout(2000);
 
-  // 封面图编辑弹窗：点右下角"确定"
-  await page.locator('.byte-modal button:has-text("确定"), button:has-text("确定")').last().click();
+  // 等待封面编辑弹窗出现
+  await page.locator('.byte-modal button:has-text("确定")').waitFor({ state: "visible", timeout: 120000 });
+
+  // 等待预览图加载完成（active 预览出现），再点确定
+  await page.locator('.byte-modal .previews .preview.active').waitFor({ state: "visible", timeout: 120000 });
+  await page.locator('.byte-modal button:has-text("确定")').click();
   await page.waitForTimeout(1000);
 
   // 检测图片上传接口完成

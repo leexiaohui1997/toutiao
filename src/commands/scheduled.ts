@@ -10,15 +10,21 @@ export function registerScheduledCommands(library: Command): void {
   // 为某本书的所有未发布文章创建定时任务
   library
     .command("schedule-book")
-    .description("为某本书的所有未发布文章创建定时任务（每天5篇，每篇隔1小时）")
-    .requiredOption("-d, --dir <dir>", "工作目录，如 docs/书名")
-    .option("--per-day <n>", "每天几篇，默认 5", "5")
-    .option("--hour-gap <h>", "每篇间隔小时，默认 1", "1")
-    .action((opts: { dir: string; perDay: string; hourGap: string }) => {
+    .description("为某本推荐书的所有未发布文章创建定时任务（每天5篇，每篇隔1小时）")
+    .requiredOption("-i, --id <id>", "推荐书籍 id")
+    .option("--per-day <n>", "每天几篇，默认 5（固定时段：8/12/18/20/22点）", "5")
+    .action((opts: { id: string; perDay: string }) => {
       const db = openLibraryDb();
-      const baseDir = resolve(process.cwd(), opts.dir);
+      const rec = db.prepare("SELECT work_dir FROM book_recommendations WHERE id = ?").get(Number(opts.id)) as { work_dir?: string };
+      if (!rec?.work_dir) {
+        console.error("✗ 该推荐书籍没有工作目录");
+        process.exit(1);
+      }
+      const baseDir = resolve(process.cwd(), rec.work_dir);
+      console.log(`工作目录: ${rec.work_dir}`);
       const perDay = Number(opts.perDay);
-      const gap = Number(opts.hourGap);
+      // 每天固定发文时段（按 perDay 取前 N 个）
+      const timeSlots = [8, 12, 18, 20, 22].slice(0, perDay);
 
       // 收集所有未发布的 article.json
       const articles: string[] = [];
@@ -32,37 +38,71 @@ export function registerScheduledCommands(library: Command): void {
           }
         }
       }
-      articles.sort();
+      articles.sort((a, b) => {
+        const na = Number(a.match(/第(\d+)篇/)?.[1] || 0);
+        const nb = Number(b.match(/第(\d+)篇/)?.[1] || 0);
+        return na - nb;
+      });
       // 过滤掉已在定时任务里的
       const existing = db.prepare("SELECT article_path FROM scheduled_posts").all() as any[];
       const set = new Set(existing.map((r: any) => r.article_path));
       const newArticles = articles.filter(a => !set.has(a));
       console.log(`共 ${articles.length} 篇未发布，其中 ${newArticles.length} 篇尚未排期`);
 
-      // 从现有最大 publish_at 接下去，或从明天早9点开始
+      // 查现有最大 publish_at，算当天已排几篇
       const maxRow = db.prepare("SELECT MAX(publish_at) as m FROM scheduled_posts WHERE status='pending'").get() as any;
-      let startTime = new Date();
-      startTime.setHours(9, 0, 0, 0);
-      startTime.setDate(startTime.getDate() + 1); // 明天开始
+      let cursor = new Date();
+      cursor.setHours(9, 0, 0, 0);
+      cursor.setDate(cursor.getDate() + 1); // 默认明天 9 点
+
       if (maxRow?.m) {
-        const existing = new Date(maxRow.m);
-        if (existing > startTime) startTime = existing;
+        const last = new Date(maxRow.m);
+        const dayStr = last.toISOString().slice(0, 10);
+        const dayCountRow = db.prepare(
+          "SELECT COUNT(*) as c FROM scheduled_posts WHERE status='pending' AND DATE(publish_at)=?"
+        ).get(dayStr) as any;
+        const dayCount = dayCountRow?.c || 0;
+        console.log(`最近一篇: ${maxRow.m}，当天已排 ${dayCount} 篇`);
+
+        if (dayCount < perDay) {
+          // 当天没排满，从下一个时段开始
+          const lastHour = last.getHours();
+          const nextSlot = timeSlots.find(h => h > lastHour);
+          if (nextSlot !== undefined) {
+            cursor = new Date(last);
+            cursor.setHours(nextSlot, 0, 0, 0);
+          } else {
+            // 当天时段用完了，次日第一个时段
+            cursor = new Date(last);
+            cursor.setHours(timeSlots[0], 0, 0, 0);
+            cursor.setDate(cursor.getDate() + 1);
+          }
+        } else {
+          // 当天排满了，从次日第一个时段开始
+          cursor = new Date(last);
+          cursor.setHours(timeSlots[0], 0, 0, 0);
+          cursor.setDate(cursor.getDate() + 1);
+        }
       }
 
       const insert = db.prepare("INSERT OR IGNORE INTO scheduled_posts (article_path, publish_at) VALUES (?, ?)");
       let count = 0;
-      let cursor = new Date(startTime);
       for (let i = 0; i < newArticles.length; i++) {
-        if (i > 0 && i % perDay === 0) {
-          cursor.setHours(9, 0, 0, 0);
-          cursor.setDate(cursor.getDate() + 1);
-        }
         const pad = (n: number) => String(n).padStart(2, "0");
         const publishAt = `${cursor.getFullYear()}-${pad(cursor.getMonth()+1)}-${pad(cursor.getDate())} ${pad(cursor.getHours())}:${pad(cursor.getMinutes())}:${pad(cursor.getSeconds())}`;
         insert.run(newArticles[i], publishAt);
         count++;
         console.log(`  ${publishAt} → ${newArticles[i]}`);
-        cursor.setHours(cursor.getHours() + gap);
+
+        // 找下一个时段：当前时段之后还有就用，没有就次日第一个时段
+        const curHour = cursor.getHours();
+        const nextSlot = timeSlots.find(h => h > curHour);
+        if (nextSlot !== undefined) {
+          cursor.setHours(nextSlot, 0, 0, 0);
+        } else {
+          cursor.setHours(timeSlots[0], 0, 0, 0);
+          cursor.setDate(cursor.getDate() + 1);
+        }
       }
       console.log(`✓ 已创建 ${count} 个定时任务`);
       db.close();
