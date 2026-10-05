@@ -1,0 +1,10 @@
+node_modules/
+dist/
+# playwright 持久化登录态目录（userDataDir，含 cookie/localStorage）
+.browser-data/
+*.log
+.DS_Store
+docs/
+data/
+books/
+logs/

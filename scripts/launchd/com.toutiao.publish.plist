@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.toutiao.publish</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>-c</string>
+        <string>echo "=== $(date '+%Y-%m-%d %H:%M:%S') ===" && cd /Users/masterpiano/Desktop/进行中的项目/toutiao && /Users/masterpiano/.nvm/versions/node/v22.19.0/bin/pnpm dev library publish</string>
+    </array>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Minute</key>
+        <integer>0</integer>
+        <key>Second</key>
+        <integer>1</integer>
+    </dict>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/Users/masterpiano/.nvm/versions/node/v22.19.0/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>/Users/masterpiano/Desktop/进行中的项目/toutiao/logs/publish.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/masterpiano/Desktop/进行中的项目/toutiao/logs/publish.err.log</string>
+</dict>
+</plist>

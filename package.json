@@ -1,0 +1,33 @@
+{
+  "name": "toutiao",
+  "version": "0.1.0",
+  "description": "基于 Playwright 的浏览器自动化脚本，登录态持久化",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "toutiao": "dist/index.js"
+  },
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.33.0",
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "bytes": "^3.1.2",
+    "commander": "^15.0.0",
+    "playwright": "^1.63.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/bytes": "^3.1.6",
+    "@types/node": "^26.6.4",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
