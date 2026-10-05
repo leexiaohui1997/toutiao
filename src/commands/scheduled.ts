@@ -129,8 +129,17 @@ export function registerScheduledCommands(library: Command): void {
     .action((opts: { count: string }) => {
       const db = openLibraryDb();
       const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+
+      // 强制发布所有待发布（调试用，固定 false）
+      const FORCE_PUBLISH_ALL = true;
+
       // 1. 先取到点的
-      let tasks = db.prepare("SELECT * FROM scheduled_posts WHERE status='pending' AND publish_at <= ? ORDER BY publish_at").all(now) as any[];
+      let tasks: any[];
+      if (FORCE_PUBLISH_ALL) {
+        tasks = db.prepare("SELECT * FROM scheduled_posts WHERE status='pending' ORDER BY publish_at").all() as any[];
+      } else {
+        tasks = db.prepare("SELECT * FROM scheduled_posts WHERE status='pending' AND publish_at <= ? ORDER BY publish_at").all(now) as any[];
+      }
       // 2. 显式指定 -n 才补
       if (opts.count) {
         const want = Number(opts.count);
@@ -142,12 +151,12 @@ export function registerScheduledCommands(library: Command): void {
       }
 
       console.log(`本次将发布 ${tasks.length} 篇`);
-      const markDone = db.prepare("UPDATE scheduled_posts SET status='done' WHERE id=?");
+      const markDone = db.prepare("UPDATE scheduled_posts SET status='done', publish_at=? WHERE id=?");
       for (const t of tasks) {
         console.log(`\n→ 发布: ${t.article_path}`);
         try {
           execSync(`pnpm dev edit --file "${t.article_path}" --publish --headless`, { stdio: "inherit" });
-          markDone.run(t.id);
+          markDone.run(now, t.id);
           // 写回 article.json 的 publish 字段
           const artPath = t.article_path;
           const art = JSON.parse(readFileSync(artPath, "utf-8"));

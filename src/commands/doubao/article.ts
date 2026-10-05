@@ -69,7 +69,10 @@ export function registerDoubaoArticleCommand(doubao: Command): void {
       }
 
       console.log(`共 ${tasks.length} 张图待生成：`);
-      tasks.forEach((t, i) => console.log(`  [${i + 1}] ${t.output}`));
+      tasks.forEach((t, i) => {
+        console.log(`  [${i + 1}] ${t.output}`);
+        console.log(`      提示词: ${t.prompt}`);
+      });
 
       // 调用生图
       const { chatId } = await runImageTasks({

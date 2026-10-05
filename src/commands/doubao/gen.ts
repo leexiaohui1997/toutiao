@@ -31,6 +31,10 @@ export async function uploadRefImage(page: Page, refPath: string): Promise<void>
 export async function sendPrompt(page: Page, prompt: string): Promise<void> {
   const input = page.locator("textarea, [contenteditable=true]").first();
   await input.click();
+  // 清空输入框
+  await page.keyboard.press("Meta+A");
+  await page.keyboard.press("Backspace");
+  await page.waitForTimeout(300);
   await page.keyboard.insertText(prompt);
   await page.waitForTimeout(500);
   await page.keyboard.press("Enter");

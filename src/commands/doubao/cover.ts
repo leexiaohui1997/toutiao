@@ -35,6 +35,7 @@ export function registerDoubaoCoverCommand(doubao: Command): void {
 
       const coverRelPath = resolve(dirname(overviewPath), "cover.png").replace(process.cwd() + "/", "");
       console.log(`生成封面: ${coverRelPath}`);
+      console.log(`提示词: ${overview.collectionCoverPrompt}`);
 
       // 直接调用 image 指令的完整逻辑
       const { chatId } = await runImageTasks({
