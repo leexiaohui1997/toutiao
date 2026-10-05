@@ -32,13 +32,9 @@ export async function launchPersistentContext(options: LaunchOptions = {}): Prom
 
   mkdirSync(userDataDir, { recursive: true });
 
-  // 用系统 Chrome，避免 Playwright Chromium 在 macOS 26 上 PAC 验证崩溃
-  const executablePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-
   const context = await chromium.launchPersistentContext(userDataDir, {
     headless,
     acceptDownloads,
-    executablePath,
     viewport: { width: viewportWidth, height: viewportHeight },
     args: ["--disable-blink-features=AutomationControlled"],
   });
