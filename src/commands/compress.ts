@@ -37,7 +37,7 @@ export async function compressImage(imgPath: string): Promise<void> {
 }
 
 /** 递归扫描目录下所有图片并压缩 */
-async function compressDir(dir: string): Promise<void> {
+export async function compressDir(dir: string): Promise<void> {
   const abs = resolve(process.cwd(), dir);
   const entries = await readdir(abs, { withFileTypes: true });
 

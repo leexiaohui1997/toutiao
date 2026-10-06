@@ -1,10 +1,11 @@
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { resolve, dirname } from "node:path";
 import type { Command } from "commander";
 import { launchPersistentContext } from "../browser.js";
 import { ensureLogin } from "../toutiao/auth.js";
 import { fillArticle, fillTags, openPublishPage, type ArticleBlock } from "../toutiao/editor.js";
 import { fillMainTitle, uploadCover, setLocation, setCollection, publish, CollectionLockedError } from "../toutiao/meta.js";
+import { compressDir } from "./compress.js";
 
 /**
  * `edit` 命令：按 JSON 文件填充文章编辑区。
@@ -54,6 +55,11 @@ export function registerEditCommand(program: Command): void {
         process.exit(1);
       }
       console.log(`已读取 ${data.content.length} 个正文块（${jsonPath}）`);
+
+      // 1.5 发布前压缩该文章目录下所有图片
+      const articleDir = dirname(jsonPath);
+      console.log("压缩文章目录图片…");
+      await compressDir(articleDir);
 
       // 2. 启动浏览器并确保登录
       const context = await launchPersistentContext({

@@ -12,6 +12,7 @@ import { registerLibraryCommand } from "./commands/library/index.js";
 import { registerCountWordsCommand } from "./commands/count-words.js";
 import { registerLaunchdCommands } from "./commands/launchd.js";
 import { registerDoubaoCommand } from "./commands/doubao/index.js";
+import { registerJimengCommand } from "./commands/jimeng/index.js";
 import { registerCompressCommand } from "./commands/compress.js";
 
 const program = new Command();
@@ -33,6 +34,7 @@ registerLibraryCommand(program);
 registerCountWordsCommand(program);
 registerLaunchdCommands(program);
 registerDoubaoCommand(program);
+registerJimengCommand(program);
 registerCompressCommand(program);
 
 program.parseAsync(process.argv);
