@@ -269,7 +269,9 @@ export async function runJimengImageTasks(
   if (credit !== null) {
     console.log(`今日可用积分：${credit}，本次需生成 ${tasks.length} 张`);
     if (credit < tasks.length) {
-      console.error(`✗ 积分不足：当前 ${credit}，需要至少 ${tasks.length}，终止`);
+      console.error(`✗✗✗ 即梦积分不足，立即暂停所有流程 ✗✗✗`);
+      console.error(`当前可用积分 ${credit}，本次需要至少 ${tasks.length} 张，无法继续生图。`);
+      console.error(`请停止后续所有成稿/生图/发布流水线，等待积分恢复或明日再试。`);
       await context.close();
       process.exit(1);
     }
