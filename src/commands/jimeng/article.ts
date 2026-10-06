@@ -38,6 +38,9 @@ export function registerJimengArticleCommand(jimeng: Command): void {
         overview = JSON.parse(await readFile(overviewPath, "utf-8"));
       } catch {}
 
+      // 合集封面是否存在：存在则本篇封面以它为参考图
+      const collectionCoverExists = !!overview.cover && existsSync(resolve(process.cwd(), overview.cover));
+
       const tasks: JimengImageTask[] = [];
 
       // 封面：cover 指向的文件不存在则生成，提示词从 coverPrompt 读
@@ -47,7 +50,11 @@ export function registerJimengArticleCommand(jimeng: Command): void {
           console.error(`✗ ${articlePath} 缺少 coverPrompt 字段`);
           process.exit(1);
         }
-        tasks.push({ prompt: article.coverPrompt, output: coverOut });
+        tasks.push({
+          prompt: article.coverPrompt,
+          output: coverOut,
+          ...(collectionCoverExists ? { ref: overview.cover } : {}),
+        });
       }
 
       // 插图：content 指向的文件不存在则生成，提示词从 block.prompt 读
@@ -76,6 +83,7 @@ export function registerJimengArticleCommand(jimeng: Command): void {
       tasks.forEach((t, i) => {
         console.log(`  [${i + 1}] ${t.output}`);
         console.log(`      提示词: ${t.prompt.slice(0, 50)}${t.prompt.length > 50 ? "..." : ""}`);
+        if (t.ref) console.log(`      参考图: ${t.ref}`);
       });
 
       // 调用即梦生图

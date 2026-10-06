@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import type { Command } from "commander";
 import { launchPersistentContext } from "../browser.js";
@@ -6,6 +7,7 @@ import { ensureLogin } from "../toutiao/auth.js";
 import { fillArticle, fillTags, openPublishPage, type ArticleBlock } from "../toutiao/editor.js";
 import { fillMainTitle, uploadCover, setLocation, setCollection, publish, CollectionLockedError } from "../toutiao/meta.js";
 import { compressDir } from "./compress.js";
+import { countWords } from "./count-words.js";
 
 /**
  * `edit` 命令：按 JSON 文件填充文章编辑区。
@@ -54,6 +56,41 @@ export function registerEditCommand(program: Command): void {
         console.error('JSON 格式错误：{ "content": [{type, content}, ...] }');
         process.exit(1);
       }
+
+      // 1.1 必填字段校验
+      const errors: string[] = [];
+      if (!data.title || !data.title.trim()) errors.push("缺少必填字段 title（主标题）");
+      if (!data.cover) {
+        errors.push("缺少必填字段 cover（封面图路径）");
+      } else if (!existsSync(resolve(process.cwd(), data.cover))) {
+        errors.push(`cover 指向的文件不存在: ${data.cover}`);
+      }
+      for (let i = 0; i < data.content.length; i++) {
+        const block = data.content[i];
+        if (!block.content || !block.content.trim()) {
+          errors.push(`content[${i}] (type=${block.type}) content 为空`);
+        }
+        if (block.type === "image") {
+          if (!existsSync(resolve(process.cwd(), block.content))) {
+            errors.push(`content[${i}] 图片文件不存在: ${block.content}`);
+          }
+        }
+      }
+      if (errors.length > 0) {
+        console.error("✗ article.json 校验失败：");
+        errors.forEach((e) => console.error("  - " + e));
+        process.exit(1);
+      }
+
+      // 1.2 正文字数检查：不足 3500 字终止
+      const wordCount = countWords(data);
+      if (wordCount < 3500) {
+        console.error(`✗ 正文字数不足：当前 ${wordCount} 字，要求 ≥ 3500 字`);
+        console.error("  请补充正文案例、展开概念或加方法建议后再发布。");
+        process.exit(1);
+      }
+      console.log(`正文字数：${wordCount}`);
+
       console.log(`已读取 ${data.content.length} 个正文块（${jsonPath}）`);
 
       // 1.5 发布前压缩该文章目录下所有图片

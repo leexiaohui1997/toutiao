@@ -1,10 +1,11 @@
 import type { Page } from "playwright";
 import { createWriteStream } from "node:fs";
-import { mkdirSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { mkdirSync, readFileSync } from "node:fs";
+import { dirname, resolve, extname } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { launchPersistentContext } from "../../browser.js";
+import { readJimengCredit } from "./login.js";
 
 const JIMENG_HOME_URL = "https://jimeng.jianying.com/ai-tool/home";
 /** 提示词输入框：prompt-editor 容器内的 tiptap 富文本编辑区 */
@@ -15,8 +16,8 @@ const SUBMIT_SELECTOR = 'button[data-generator-submit-available="true"]:not([dis
 const TOOLBAR_COMBOBOX_SELECTOR = '[class*="toolbar-settings-content-"] div[role="combobox"]';
 /** 设置面板展开按钮：toolbar-settings-content- 内的 lv-btn */
 const SETTINGS_BTN_SELECTOR = '[class*="toolbar-settings-content-"] button.lv-btn';
-/** 参考图上传容器：点它会触发选图；内部藏有 input[type=file] */
-const REFERENCE_UPLOAD_SELECTOR = '[class^="reference-upload-"]';
+/** 参考图组容器：drop 事件上传目标，缩略图会渲染在这里 */
+const REFERENCE_GROUP_SELECTOR = '[class*="reference-group-content-"]';
 
 /** 即梦生图单条任务 */
 export interface JimengImageTask {
@@ -126,21 +127,46 @@ export async function downloadImage(src: string, outputRelPath: string): Promise
 }
 
 /**
- * 上传参考图：点 reference-upload 触发器（div），通过 Playwright 的 filechooser 事件直接喂文件，
- * 不依赖 file input 在 DOM 里的具体位置。上传后等待预览加载。
+ * 上传参考图：即梦页面没有 <input type="file">，加号按钮在 headless 下点击不会触发
+ * filechooser。改用浏览器内构造 File + DataTransfer，直接 dispatch dragenter/dragover/drop
+ * 事件到参考图组容器，等价于用户把文件拖进去。实测可成功触发上传缩略图。
  */
 export async function uploadReferenceImage(page: Page, refRelPath: string): Promise<void> {
-  const trigger = page.locator(REFERENCE_UPLOAD_SELECTOR).first();
-  await trigger.waitFor({ state: "visible", timeout: 10000 });
+  const absPath = resolve(process.cwd(), refRelPath);
+  const buf = readFileSync(absPath);
+  const b64 = buf.toString("base64");
+  const ext = extname(absPath).toLowerCase();
+  const mime = ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" : ext === ".webp" ? "image/webp" : "image/png";
 
-  const [fileChooser] = await Promise.all([
-    page.waitForEvent("filechooser", { timeout: 10000 }),
-    trigger.click(),
-  ]);
-  await fileChooser.setFiles(resolve(process.cwd(), refRelPath));
-  console.log(`✓ 已上传参考图: ${refRelPath}`);
-  // 等参考图上传完成并出现在预览区
+  await page.evaluate(
+    async ({ b64, name, mime }) => {
+      const bin = atob(b64);
+      const arr = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      const file = new File([arr], name, { type: mime });
+      const dt = new DataTransfer();
+      dt.items.add(file);
+
+      const target = document.querySelector('[class*="reference-group-content-"]') as HTMLElement
+        || document.querySelector('[class*="reference-group-"]') as HTMLElement;
+      if (!target) throw new Error("未找到参考图上传容器");
+
+      const opts: DragEventInit = { bubbles: true, cancelable: true, dataTransfer: dt };
+      target.dispatchEvent(new DragEvent("dragenter", opts));
+      target.dispatchEvent(new DragEvent("dragover", opts));
+      target.dispatchEvent(new DragEvent("drop", opts));
+    },
+    { b64, name: `ref${ext}`, mime },
+  );
+
+  // 等缩略图出现并上传完成（drop 后容器内会渲染 img.image-*）
+  await page
+    .locator(`${REFERENCE_GROUP_SELECTOR} img[src^="blob:"]`)
+    .first()
+    .waitFor({ state: "visible", timeout: 30000 });
+  // 再留时间让上传完成、loading 消失
   await page.waitForTimeout(3000);
+  console.log(`✓ 已上传参考图: ${refRelPath}`);
 }
 
 /**
@@ -237,16 +263,28 @@ export async function runJimengImageTasks(
     process.exit(1);
   }
 
+  // 前置积分检查：等积分元素渲染后读取，不够本次任务数则直接终止
+  await page.waitForTimeout(2000);
+  const credit = await readJimengCredit(page);
+  if (credit !== null) {
+    console.log(`今日可用积分：${credit}，本次需生成 ${tasks.length} 张`);
+    if (credit < tasks.length) {
+      console.error(`✗ 积分不足：当前 ${credit}，需要至少 ${tasks.length}，终止`);
+      await context.close();
+      process.exit(1);
+    }
+  } else {
+    console.log("⚠ 未取到积分数值，跳过积分检查");
+  }
+
   // 先聚焦输入框，再做后续工具栏操作（模式/模型/参数）
   await page.locator(PROMPT_EDITOR_SELECTOR).first().focus();
   await page.waitForTimeout(300);
 
   // 新会话才需要选模式/模型/参数；已有会话沿用上次设置
-  if (!opts.workspaceId) {
-    await openModeSelector(page);
-    await selectModel(page);
-    await configureImageSettings(page);
-  }
+  await openModeSelector(page);
+  await selectModel(page);
+  await configureImageSettings(page);
 
   for (let i = 0; i < tasks.length; i++) {
     console.log(`\n[${i + 1}/${tasks.length}] output=${tasks[i].output}`);
