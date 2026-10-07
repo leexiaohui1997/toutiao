@@ -4,6 +4,7 @@ import type { Command } from "commander";
 import { launchPersistentContext } from "../browser.js";
 import { ensureLogin } from "../toutiao/auth.js";
 import { createCollection } from "../toutiao/collection.js";
+import { compressImage } from "./compress.js";
 
 /**
  * `create-collection` 命令：从 overview.json 创建合集。
@@ -41,6 +42,10 @@ export function registerCreateCollectionCommand(program: Command): void {
         process.exit(1);
       }
       console.log(`创建合集：${data.collectionName}`);
+
+      // 上传前先压缩封面图
+      console.log("压缩合集封面图…");
+      await compressImage(data.cover);
 
       const context = await launchPersistentContext({
         headless: opts.headless,

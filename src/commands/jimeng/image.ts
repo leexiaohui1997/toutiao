@@ -110,8 +110,37 @@ export async function getLatestGeneratedImageSrc(page: Page, timeoutMs = 60000):
 
   const src = await img.getAttribute("src");
   if (!src) throw new Error("最新生成图 src 为空");
-  console.log(`✓ 最新生成图: ${src}`);
-  return src;
+  console.log(`✓ 最新生成图（缩略图）: ${src}`);
+
+  // 点小图 → 点预览大图 → 取高清 zoom img 的 src
+  await img.click();
+  const previewImg = page
+    .locator('div[class^="preview-area-"] img[data-apm-action="ai-generated-image-detail-card"]')
+    .first();
+  await previewImg.waitFor({ state: "visible", timeout: 10000 });
+  await previewImg.click();
+
+  const zoomImg = page
+    .locator('div[class^="zoom-image-container-"] img[class^="preview-"]')
+    .first();
+  await zoomImg.waitFor({ state: "visible", timeout: 10000 });
+  const hdSrc = await zoomImg.getAttribute("src");
+  if (!hdSrc) throw new Error("高清大图 src 为空");
+  console.log(`✓ 高清大图: ${hdSrc}`);
+  return hdSrc;
+}
+
+/** 下载完成后关闭两层弹层：先关大图 modal，再关预览弹层 */
+export async function closePreviewOverlays(page: Page): Promise<void> {
+  // 1. 关闭大图弹层
+  await page.locator("span.lv-modal-close-icon").first().click();
+  console.log("✓ 已关闭大图弹层");
+  await page.waitForTimeout(500);
+
+  // 2. 关闭预览弹层
+  await page.locator('button[aria-label="去首页"]').first().click();
+  console.log("✓ 已关闭预览弹层");
+  await page.waitForTimeout(500);
 }
 
 /** 把图片 URL 下载到本地（output 相对项目根） */
@@ -279,17 +308,22 @@ export async function runJimengImageTasks(
     console.log("⚠ 未取到积分数值，跳过积分检查");
   }
 
-  // 先聚焦输入框，再做后续工具栏操作（模式/模型/参数）
-  await page.locator(PROMPT_EDITOR_SELECTOR).first().focus();
-  await page.waitForTimeout(300);
-
-  // 新会话才需要选模式/模型/参数；已有会话沿用上次设置
-  await openModeSelector(page);
-  await selectModel(page);
-  await configureImageSettings(page);
+  // 每张图前都重新走一遍"等输入框 → focus → 选模式/模型/参数"，
+  // 上一张结束后用 page.reload() 重置页面，不再走两层弹层关闭。
 
   for (let i = 0; i < tasks.length; i++) {
     console.log(`\n[${i + 1}/${tasks.length}] output=${tasks[i].output}`);
+
+    // 等输入框可见（首次是 goto 后，后续是 reload 后），再聚焦
+    await page.locator(PROMPT_EDITOR_SELECTOR).first().waitFor({ state: "visible", timeout: 30000 });
+    await page.locator(PROMPT_EDITOR_SELECTOR).first().focus();
+    await page.waitForTimeout(300);
+
+    // 每次都重新选模式/模型/参数（reload 后工具栏状态会重置）
+    await openModeSelector(page);
+    await selectModel(page);
+    await configureImageSettings(page);
+
     if (tasks[i].ref) {
       await uploadReferenceImage(page, tasks[i].ref!);
     }
@@ -298,6 +332,12 @@ export async function runJimengImageTasks(
     await waitForGenerationComplete(page);
     const src = await getLatestGeneratedImageSrc(page);
     await downloadImage(src, tasks[i].output);
+
+    // 下一张：刷新页面重置状态（最后一张不刷）
+    if (i < tasks.length - 1) {
+      console.log("🔄 刷新页面准备下一张…");
+      await page.reload({ waitUntil: "domcontentloaded", timeout: 30000 });
+    }
   }
 
   const workspaceId = new URL(page.url()).searchParams.get("workspace") ?? undefined;

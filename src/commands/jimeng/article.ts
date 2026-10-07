@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { readFile, writeFile } from "node:fs/promises";
-import { resolve, dirname, join } from "node:path";
+import { resolve, dirname, join, relative } from "node:path";
 import { existsSync } from "node:fs";
 import { runJimengImageTasks, type JimengImageTask } from "./image.js";
 
@@ -30,6 +30,8 @@ export function registerJimengArticleCommand(jimeng: Command): void {
       const articlePath = resolve(process.cwd(), opts.file);
       const article: ArticleJson = JSON.parse(await readFile(articlePath, "utf-8"));
       const articleDir = dirname(articlePath);
+      // 图片就放在 article.json 同目录下，路径前缀相对项目根
+      const dirPrefix = relative(process.cwd(), articleDir);
 
       // 找上两级目录的 overview.json
       const overviewPath = join(articleDir, "..", "overview.json");
@@ -44,7 +46,7 @@ export function registerJimengArticleCommand(jimeng: Command): void {
       const tasks: JimengImageTask[] = [];
 
       // 封面：cover 指向的文件不存在则生成，提示词从 coverPrompt 读
-      const coverOut = `docs/${article.bookTitle}/第${article.no}篇/cover.png`;
+      const coverOut = join(dirPrefix, "cover.png");
       if (!existsSync(resolve(process.cwd(), coverOut))) {
         if (!article.coverPrompt) {
           console.error(`✗ ${articlePath} 缺少 coverPrompt 字段`);
@@ -61,7 +63,7 @@ export function registerJimengArticleCommand(jimeng: Command): void {
       let imgNo = 1;
       for (const block of article.content) {
         if (block.type !== "image") continue;
-        const imgOut = `docs/${article.bookTitle}/第${article.no}篇/插图${imgNo}.png`;
+        const imgOut = join(dirPrefix, `插图${imgNo}.png`);
         if (existsSync(resolve(process.cwd(), imgOut))) {
           imgNo++;
           continue;
@@ -70,7 +72,11 @@ export function registerJimengArticleCommand(jimeng: Command): void {
           console.error(`✗ 插图${imgNo} 缺少 prompt 字段`);
           process.exit(1);
         }
-        tasks.push({ prompt: block.prompt, output: imgOut });
+        tasks.push({
+          prompt: block.prompt,
+          output: imgOut,
+          ...(collectionCoverExists ? { ref: overview.cover } : {}),
+        });
         imgNo++;
       }
 
@@ -80,11 +86,6 @@ export function registerJimengArticleCommand(jimeng: Command): void {
       }
 
       console.log(`共 ${tasks.length} 张图待生成：`);
-      tasks.forEach((t, i) => {
-        console.log(`  [${i + 1}] ${t.output}`);
-        console.log(`      提示词: ${t.prompt.slice(0, 50)}${t.prompt.length > 50 ? "..." : ""}`);
-        if (t.ref) console.log(`      参考图: ${t.ref}`);
-      });
 
       // 调用即梦生图
       const { workspaceId } = await runJimengImageTasks(tasks, {
@@ -97,7 +98,7 @@ export function registerJimengArticleCommand(jimeng: Command): void {
       imgNo = 1;
       for (const block of article.content) {
         if (block.type !== "image") continue;
-        block.content = `docs/${article.bookTitle}/第${article.no}篇/插图${imgNo}.png`;
+        block.content = join(dirPrefix, `插图${imgNo}.png`);
         imgNo++;
       }
       await writeFile(articlePath, JSON.stringify(article, null, 2) + "\n", "utf-8");
@@ -109,5 +110,6 @@ export function registerJimengArticleCommand(jimeng: Command): void {
       }
 
       console.log(`✓ 已更新 article.json，会话 id: ${workspaceId || overview.jimengWorkspaceId || "(沿用)"}`);
+      console.log("\n⚠️⚠️⚠️ 请一定要记得检查生成的图片是否符合要求！！⚠️⚠️⚠️");
     });
 }

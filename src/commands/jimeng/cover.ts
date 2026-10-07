@@ -84,5 +84,6 @@ export function registerJimengCoverCommand(jimeng: Command): void {
       if (workspaceId) plan.overview.jimengWorkspaceId = workspaceId;
       await writeFile(plan.overviewPath, JSON.stringify(plan.overview, null, 2) + "\n", "utf-8");
       console.log(`✓ 已更新概览: cover=${plan.coverRelPath}, workspaceId=${workspaceId || plan.overview.jimengWorkspaceId || "(沿用)"}`);
+      console.log("\n⚠️⚠️⚠️ 请一定要记得检查生成的图片是否符合要求！！⚠️⚠️⚠️");
     });
 }

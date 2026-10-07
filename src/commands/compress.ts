@@ -19,7 +19,9 @@ export async function compressImage(imgPath: string): Promise<void> {
 
   let pipeline = sharp(abs);
   if (ext === ".png") {
-    pipeline = pipeline.png({ quality: 80, palette: true, compressionLevel: 9 });
+    // 不开 palette 量化：AI 生成图颜色丰富，量化+抖动反而让 PNG 体积暴涨
+    // 只走最高级无损 deflate 压缩
+    pipeline = pipeline.png({ compressionLevel: 9, effort: 10 });
   } else if (ext === ".webp") {
     pipeline = pipeline.webp({ quality: 80 });
   } else {
@@ -27,11 +29,19 @@ export async function compressImage(imgPath: string): Promise<void> {
   }
   await pipeline.toFile(tmpPath);
 
+  const after = (await stat(tmpPath)).size;
+  // 防御：压完反而更大就丢弃压缩结果，保留原文件
+  if (after >= before) {
+    const { unlink } = await import("node:fs/promises");
+    await unlink(tmpPath);
+    console.log(`  跳过（压缩后未变小）: ${basename(imgPath)} ${(before / 1024).toFixed(0)}KB`);
+    return;
+  }
+
   // 覆盖原文件
   const { rename } = await import("node:fs/promises");
   await rename(tmpPath, abs);
 
-  const after = (await stat(abs)).size;
   const ratio = ((1 - after / before) * 100).toFixed(1);
   console.log(`✓ ${basename(imgPath)}: ${(before / 1024).toFixed(0)}KB → ${(after / 1024).toFixed(0)}KB (-${ratio}%)`);
 }
