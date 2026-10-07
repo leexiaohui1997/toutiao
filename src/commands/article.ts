@@ -2,7 +2,7 @@ import type { Command } from "commander";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve, dirname, join, relative } from "node:path";
 import { existsSync } from "node:fs";
-import { runJimengImageTasks, type JimengImageTask } from "./image.js";
+import { runImageTasks, sessionIdField, type ImageEngine, type ImageTask } from "./image-runner.js";
 
 interface ArticleBlock {
   type: "title" | "text" | "image";
@@ -19,19 +19,24 @@ interface ArticleJson {
   [key: string]: any;
 }
 
-export function registerJimengArticleCommand(jimeng: Command): void {
-  jimeng
+/**
+ * 顶层 article 命令：从 article.json 批量生成封面 + 插图。
+ * 通过 --engine 指定生图引擎（doubao / jimeng / yuanbao）。
+ */
+export function registerArticleCommand(program: Command): void {
+  program
     .command("article")
-    .description("给成稿路径，自动生成封面与插图")
+    .description("给成稿路径，自动生成封面与插图（--engine 选生图引擎）")
     .requiredOption("-f, --file <path>", "article.json 路径（相对项目根）")
-    .option("-w, --workspace <id>", "指定即梦会话 id（workspace）")
+    .option("--engine <name>", "生图引擎: doubao / jimeng / yuanbao", "jimeng")
+    .option("-w, --session <id>", "指定会话 id（覆盖 overview 里的值）")
     .option("--headless", "无头模式", false)
-    .action(async (opts: { file: string; workspace?: string; headless: boolean }) => {
+    .action(async (opts: { file: string; engine: ImageEngine; session?: string; headless: boolean }) => {
       const articlePath = resolve(process.cwd(), opts.file);
       const article: ArticleJson = JSON.parse(await readFile(articlePath, "utf-8"));
       const articleDir = dirname(articlePath);
-      // 图片就放在 article.json 同目录下，路径前缀相对项目根
       const dirPrefix = relative(process.cwd(), articleDir);
+      const sidField = sessionIdField(opts.engine);
 
       // 找上两级目录的 overview.json
       const overviewPath = join(articleDir, "..", "overview.json");
@@ -43,7 +48,7 @@ export function registerJimengArticleCommand(jimeng: Command): void {
       // 合集封面是否存在：存在则本篇封面以它为参考图
       const collectionCoverExists = !!overview.cover && existsSync(resolve(process.cwd(), overview.cover));
 
-      const tasks: JimengImageTask[] = [];
+      const tasks: ImageTask[] = [];
 
       // 封面：cover 指向的文件不存在则生成，提示词从 coverPrompt 读
       const coverOut = join(dirPrefix, "cover.png");
@@ -72,11 +77,7 @@ export function registerJimengArticleCommand(jimeng: Command): void {
           console.error(`✗ 插图${imgNo} 缺少 prompt 字段`);
           process.exit(1);
         }
-        tasks.push({
-          prompt: block.prompt,
-          output: imgOut,
-          ...(collectionCoverExists ? { ref: overview.cover } : {}),
-        });
+        tasks.push({ prompt: block.prompt, output: imgOut });
         imgNo++;
       }
 
@@ -85,12 +86,11 @@ export function registerJimengArticleCommand(jimeng: Command): void {
         process.exit(0);
       }
 
-      console.log(`共 ${tasks.length} 张图待生成：`);
+      console.log(`[engine=${opts.engine}] 共 ${tasks.length} 张图待生成：`);
 
-      // 调用即梦生图
-      const { workspaceId } = await runJimengImageTasks(tasks, {
+      const { sessionId } = await runImageTasks(opts.engine, tasks, {
         headless: opts.headless,
-        workspaceId: opts.workspace || overview.jimengWorkspaceId,
+        sessionId: opts.session || overview[sidField],
       });
 
       // 回写 article.json：cover / image block.content 写成路径（coverPrompt / block.prompt 保留）
@@ -103,13 +103,13 @@ export function registerJimengArticleCommand(jimeng: Command): void {
       }
       await writeFile(articlePath, JSON.stringify(article, null, 2) + "\n", "utf-8");
 
-      // 回写 overview.json 的 jimengWorkspaceId
-      if (workspaceId) {
-        overview.jimengWorkspaceId = workspaceId;
+      // 回写 overview.json 的会话 id
+      if (sessionId) {
+        overview[sidField] = sessionId;
         await writeFile(overviewPath, JSON.stringify(overview, null, 2) + "\n", "utf-8");
       }
 
-      console.log(`✓ 已更新 article.json，会话 id: ${workspaceId || overview.jimengWorkspaceId || "(沿用)"}`);
+      console.log(`✓ 已更新 article.json，${sidField}: ${sessionId || overview[sidField] || "(沿用)"}`);
       console.log("\n⚠️⚠️⚠️ 请一定要记得检查生成的图片是否符合要求！！⚠️⚠️⚠️");
     });
 }

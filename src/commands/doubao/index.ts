@@ -2,11 +2,9 @@ import type { Command } from "commander";
 import { registerDoubaoLoginCommand } from "./login.js";
 import { registerDoubaoImageCommand } from "./image.js";
 import { registerDoubaoRenameCommand } from "./rename-cmd.js";
-import { registerDoubaoCoverCommand } from "./cover.js";
-import { registerDoubaoArticleCommand } from "./article.js";
 
 /**
- * `doubao` 命令组：豆包网页自动化。
+ * `doubao` 命令组：豆包网页自动化（底层生图能力由顶层 cover/article --engine doubao 调用）。
  */
 export function registerDoubaoCommand(program: Command): void {
   const doubao = program
@@ -16,6 +14,4 @@ export function registerDoubaoCommand(program: Command): void {
   registerDoubaoLoginCommand(doubao);
   registerDoubaoImageCommand(doubao);
   registerDoubaoRenameCommand(doubao);
-  registerDoubaoCoverCommand(doubao);
-  registerDoubaoArticleCommand(doubao);
 }

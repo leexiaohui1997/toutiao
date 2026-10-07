@@ -13,6 +13,9 @@ import { registerCountWordsCommand } from "./commands/count-words.js";
 import { registerLaunchdCommands } from "./commands/launchd.js";
 import { registerDoubaoCommand } from "./commands/doubao/index.js";
 import { registerJimengCommand } from "./commands/jimeng/index.js";
+import { registerYuanbaoCommand } from "./commands/yuanbao/index.js";
+import { registerCoverCommand } from "./commands/cover.js";
+import { registerArticleCommand } from "./commands/article.js";
 import { registerCompressCommand } from "./commands/compress.js";
 
 const program = new Command();
@@ -35,6 +38,9 @@ registerCountWordsCommand(program);
 registerLaunchdCommands(program);
 registerDoubaoCommand(program);
 registerJimengCommand(program);
+registerYuanbaoCommand(program);
+registerCoverCommand(program);
+registerArticleCommand(program);
 registerCompressCommand(program);
 
 program.parseAsync(process.argv);
