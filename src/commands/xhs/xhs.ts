@@ -5,6 +5,14 @@ const XHS_CREATOR_HOME = "https://creator.xiaohongshu.com/";
 const XHS_PUBLISH_PAGE =
   "https://creator.xiaohongshu.com/publish/publish?source=official&from=tab_switch&target=article";
 
+/** 点"下一步"后如果小红书还在处理图片（toast: 笔记图片生成中，请稍后...），抛出此错误，外层 reload 重试 */
+export class ImageGeneratingError extends Error {
+  constructor() {
+    super("笔记图片生成中，请稍后...");
+    this.name = "ImageGeneratingError";
+  }
+}
+
 /**
  * 小红书网页操作封装。所有方法挂在实例上，便于在创建合集/发布笔记等场景复用。
  */
@@ -305,9 +313,26 @@ export class Xhs {
 
     // 2. 等"下一步"按钮出现并点击
     const nextBtn = this.page.locator('button:has-text("下一步")').first();
-    await nextBtn.waitFor({ state: "visible", timeout: 15_000 });
+    await nextBtn.waitFor({ state: "visible", timeout: 0 });
     await nextBtn.click();
     console.log("[xhs] 已点击 下一步");
+
+    // 点完下一步后，并行等两个东西：
+    //  - toast "笔记图片生成中，请稍后..." → 抛 ImageGeneratingError，外层 reload 重走
+    //  - tags 输入框出现 → 正常继续
+    const toast = this.page.locator("text=笔记图片生成中，请稍后").first();
+    const tagEditor = this.page
+      .locator(".tiptap-container div[contenteditable='true']")
+      .first();
+    await Promise.race([
+      toast
+        .waitFor({ state: "visible", timeout: 15_000 })
+        .then(() => {
+          console.log("[xhs] 检测到 toast：笔记图片生成中，请稍后...");
+          throw new ImageGeneratingError();
+        }),
+      tagEditor.waitFor({ state: "visible", timeout: 15_000 }),
+    ]);
 
     // 3. 有 tags 才填；没有则跳过
     if (!tags || tags.length === 0) {
@@ -316,10 +341,6 @@ export class Xhs {
     }
 
     // 等 tags 输入框（.tiptap-container 下的 div[contenteditable=true]）出现，聚焦后输入
-    const tagEditor = this.page
-      .locator(".tiptap-container div[contenteditable='true']")
-      .first();
-    await tagEditor.waitFor({ state: "visible", timeout: 0 });
     await tagEditor.focus();
     // 小红书 tags 格式：左 # 开头、结尾不带 #；article.json 里是 "#话题#"，去掉结尾 #
     const tagsText = tags.map((t) => t.replace(/#\s*$/, "")).join(" ");
@@ -378,12 +399,31 @@ export class Xhs {
     }
   }
 
-  /** 点"发布"按钮，等"发布成功"提示出现 */
+  /** 点"发布"：直接定位 xhs-publish-btn 自定义元素，调用其 _onPublish() 方法（绕过 shadow-root） */
   async clickPublish(): Promise<void> {
-    const btn = this.page.locator('button:has-text("发布")').first();
-    await btn.waitFor({ state: "visible", timeout: 15_000 });
-    await btn.click();
-    console.log("[xhs] 已点击 发布");
+    const host = this.page.locator("xhs-publish-btn").first();
+    await host.waitFor({ state: "visible", timeout: 150_000 });
+
+    const doPublish = () =>
+      host.evaluate((el: any) => {
+        if (typeof el._onPublish !== "function") {
+          throw new Error(`xhs-publish-btn 上未找到 _onPublish 方法（实际 keys: ${Object.keys(el).join(",")}）`);
+        }
+        el._onPublish();
+      });
+
+    // 点一次 → 等 2s → 若按钮还在则再点；最多重试 5 次
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      await doPublish();
+      console.log(`[xhs] 已调用 xhs-publish-btn._onPublish()（第 ${attempt} 次）`);
+      await new Promise((r) => setTimeout(r, 2000));
+      const stillThere = (await host.count()) > 0 && (await host.isVisible().catch(() => false));
+      if (!stillThere) {
+        console.log("[xhs] 发布按钮已消失，认为已触发发布");
+        break;
+      }
+      console.log("[xhs] 发布按钮仍在页面上，重试…");
+    }
 
     await this.page
       .locator("text=发布成功")

@@ -2,10 +2,13 @@ import { readFile, writeFile } from "node:fs/promises";
 import { resolve, dirname, join } from "node:path";
 import type { Command } from "commander";
 import { launchPersistentContext } from "../../browser.js";
-import { Xhs } from "./xhs.js";
+import { Xhs, ImageGeneratingError } from "./xhs.js";
 
 const XHS_PUBLISH_PAGE =
   "https://creator.xiaohongshu.com/publish/publish?source=official&from=tab_switch&target=article";
+
+/** 图片生成中 toast 最多重试几次 */
+const MAX_IMAGE_GENERATING_RETRIES = 5;
 
 /**
  * `xhs publish` 命令：从 article.json 在小红书发布图文笔记。
@@ -85,15 +88,30 @@ export function registerXhsPublishCommand(xhsCmd: Command): void {
         process.exit(1);
       }
 
-      // hover 合集卡片 → 管理 → 添加长文笔记 → 写长文笔记
-      await xhs.enterLongArticleEditor(collectionName);
+      // ===== 主流程：从 hover 合集卡片开始，遇"图片生成中"则 reload 重走 =====
+      for (let attempt = 1; ; attempt++) {
+        try {
+          // hover 合集卡片 → 管理 → 添加长文笔记 → 写长文笔记
+          await xhs.enterLongArticleEditor(collectionName);
 
-      // 填标题 + 正文
-      await xhs.fillArticleTitle(article.title);
-      await xhs.fillArticleBody(article.content);
+          // 填标题 + 正文
+          await xhs.fillArticleTitle(article.title);
+          await xhs.fillArticleBody(article.content);
 
-      // 一键排版 → 下一步 → 填 tags
-      await xhs.finishAndAddTags(article.tags);
+          // 一键排版 → 下一步 → 填 tags（内部会检测"图片生成中"toast）
+          await xhs.finishAndAddTags(article.tags);
+          break; // 没抛 ImageGeneratingError，正常继续
+        } catch (err) {
+          if (err instanceof ImageGeneratingError && attempt <= MAX_IMAGE_GENERATING_RETRIES) {
+            console.log(`\n⚠️ [第 ${attempt} 次] 图片仍在生成中，reload 页面后从 hover 合集卡片重走…\n`);
+            await page.goto(XHS_PUBLISH_PAGE, { waitUntil: "domcontentloaded", timeout: 30_000 });
+            // 等合集卡片重新出现
+            await existingCard.waitFor({ state: "visible", timeout: 15_000 });
+            continue;
+          }
+          throw err;
+        }
+      }
 
       // 选合集 + 勾选原创
       await xhs.selectCollectionAndOriginal(collectionName);

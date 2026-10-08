@@ -131,7 +131,7 @@ export function registerScheduledCommands(library: Command): void {
       const now = new Date().toISOString().slice(0, 19).replace("T", " ");
 
       // 强制发布所有待发布（调试用，固定 false）
-      const FORCE_PUBLISH_ALL = true;
+      const FORCE_PUBLISH_ALL = false;
 
       // 1. 先取到点的
       let tasks: any[];
