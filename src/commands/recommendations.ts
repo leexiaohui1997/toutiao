@@ -116,8 +116,10 @@ export function getWorkdirStatus(rec: { id: number; name: string; work_dir: stri
     const ov = JSON.parse(readFileSync(overviewPath, "utf-8"));
     result.collectionName = ov.collectionName || "";
     result.collectionCover = ov.cover ? existsSync(resolve(process.cwd(), ov.cover)) : false;
+    result.xhsCollectionCover = ov.xhsCover ? existsSync(resolve(process.cwd(), ov.xhsCover)) : false;
     result.articleCount = ov.articlePlan?.length || 0;
     result.collectionCreated = ov.created === true;
+    result.xhsCollectionCreated = ov.xhsCreated === true;
     result.tagsCollected = ov.tagsCollected === true;
   }
 
@@ -131,17 +133,20 @@ export function getWorkdirStatus(rec: { id: number; name: string; work_dir: stri
       const articlePath = join(articleDir, "article.json");
       const hasArticle = existsSync(articlePath);
       const hasImages = readdirSync(articleDir).some(f => f.startsWith("插图") || f === "cover.png");
-      let published = false; let title = "";
+      let published = false; let xhsPublished = false; let title = "";
       let wordCount = 0;
       if (hasArticle) {
         const art = JSON.parse(readFileSync(articlePath, "utf-8"));
-        published = art.publish === true; title = art.title || "";
+        published = art.publish === true;
+        xhsPublished = art.xhsPublish === true;
+        title = art.title || "";
         wordCount = countWords(art);
       }
-      articles[no] = { title, hasArticle, hasImages, published, wordCount };
+      articles[no] = { title, hasArticle, hasImages, published, xhsPublished, wordCount };
     }
   }
   result.articles = articles;
   result.publishedCount = Object.values(articles).filter((a: any) => a.published).length;
+  result.xhsPublishedCount = Object.values(articles).filter((a: any) => a.xhsPublished).length;
   return result;
 }

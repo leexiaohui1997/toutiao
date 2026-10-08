@@ -18,6 +18,8 @@ import { registerXhsCommand } from "./commands/xhs/index.js";
 import { registerCoverCommand } from "./commands/cover.js";
 import { registerArticleCommand } from "./commands/article.js";
 import { registerCompressCommand } from "./commands/compress.js";
+import { registerCreateCollectionAllCommand } from "./commands/create-collection-all.js";
+import { registerPublishAllCommand } from "./commands/publish-all.js";
 
 const program = new Command();
 
@@ -44,5 +46,7 @@ registerXhsCommand(program);
 registerCoverCommand(program);
 registerArticleCommand(program);
 registerCompressCommand(program);
+registerCreateCollectionAllCommand(program);
+registerPublishAllCommand(program);
 
 program.parseAsync(process.argv);

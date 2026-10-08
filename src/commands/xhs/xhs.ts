@@ -149,4 +149,246 @@ export class Xhs {
     await this.page.reload({ waitUntil: "domcontentloaded", timeout: 30_000 });
     console.log("[xhs] 页面已 reload");
   }
+
+  /**
+   * 从合集卡片进入长文笔记编辑器：
+   * hover .article-card → 点"管理" → 点"添加长文笔记" → 点"写长文笔记"
+   */
+  async enterLongArticleEditor(collectionName: string): Promise<void> {
+    const card = this.page
+      .locator(`.article-card:has-text("${collectionName}")`)
+      .first();
+    await card.waitFor({ state: "visible", timeout: 15_000 });
+
+    // hover .content-section 才会浮出"管理"按钮
+    const contentSection = card.locator(".content-section").first();
+    await contentSection.hover();
+
+    const manageBtn = card.locator('button:has-text("管理")').first();
+    await manageBtn.waitFor({ state: "visible", timeout: 5_000 });
+    await manageBtn.click();
+    console.log("[xhs] 已点击 管理");
+
+    const addBtn = this.page.locator('button:has-text("添加长文笔记")').first();
+    await addBtn.waitFor({ state: "visible", timeout: 5_000 });
+    await addBtn.click();
+    console.log("[xhs] 已点击 添加长文笔记");
+
+    const writeBtn = this.page.locator('button:has-text("写长文笔记")').first();
+    await writeBtn.waitFor({ state: "visible", timeout: 5_000 });
+    await writeBtn.click();
+    console.log("[xhs] 已点击 写长文笔记");
+  }
+
+  /** 长文编辑器：填标题（fill 后读回验证，失败则 click 聚焦 + 键盘逐字补输入） */
+  async fillArticleTitle(title: string): Promise<void> {
+    const ta = this.page.locator('textarea[placeholder="输入标题"]').first();
+    await ta.waitFor({ state: "visible", timeout: 15_000 });
+
+    // 先 click 聚焦，再 fill
+    await ta.click();
+    await ta.fill(title);
+
+    // 读回验证：若 value 不对，retry 一次（clear + 键盘逐字输入）
+    let val = await ta.inputValue();
+    if (val !== title) {
+      console.log(`[xhs] 标题 fill 后读回不一致（"${val}"），重试…`);
+      await ta.click();
+      await this.page.keyboard.press("Control+A");
+      await this.page.keyboard.press("Backspace");
+      await this.page.keyboard.type(title, { delay: 30 });
+      val = await ta.inputValue();
+    }
+
+    if (val !== title) {
+      throw new Error(`标题填充失败：期望 "${title}"，实际 "${val}"`);
+    }
+    console.log(`[xhs] 已填写文章标题: ${title}`);
+  }
+
+  /**
+   * 长文编辑器：按 content 块顺序填正文。
+   * - title：先点 .edit-page .header .mid button.menu-item 第三个（小标题按钮），再插文字；
+   * - text：直接插文字；
+   * - image：点 .edit-page .header .mid button.menu-item 第九个（上传图片按钮），用 fileChooser 选文件；
+   * 每填完一块（后面还有块）按一次 Enter 换行。
+   */
+  async fillArticleBody(blocks: Array<{ type: string; content?: string; prompt?: string }>): Promise<void> {
+    const editor = this.page
+      .locator('.rich-editor-content div.tiptap[contenteditable="true"]')
+      .first();
+    await editor.waitFor({ state: "visible", timeout: 15_000 });
+    await editor.focus();
+    console.log(`[xhs] 正文编辑器已聚焦，共 ${blocks.length} 个块`);
+
+    let uploadedImageCount = 0;
+
+    for (let i = 0; i < blocks.length; i++) {
+      const block = blocks[i];
+      const hasNext = i < blocks.length - 1;
+
+      if (block.type === "title") {
+        // 点小标题菜单按钮（.edit-page .header .mid .menu-item 第三个）
+        const menuBtn = this.page
+          .locator(".edit-page .header .mid button.menu-item")
+          .nth(2);
+        await menuBtn.waitFor({ state: "visible", timeout: 5_000 });
+        await menuBtn.click();
+        await new Promise((r) => setTimeout(r, 300));
+        await this.page.keyboard.insertText(block.content ?? "");
+        console.log(`[xhs] [${i + 1}/${blocks.length}] title: ${(block.content ?? "").slice(0, 20)}…`);
+      } else if (block.type === "text") {
+        await this.page.keyboard.insertText(block.content ?? "");
+        console.log(`[xhs] [${i + 1}/${blocks.length}] text: ${(block.content ?? "").slice(0, 20)}…`);
+      } else if (block.type === "image") {
+        const rel = block.content ?? "";
+        if (!rel) throw new Error(`image 块缺 content 路径: #${i + 1}`);
+        uploadedImageCount += 1;
+        await this.uploadImageViaMenu(rel, uploadedImageCount);
+        console.log(`[xhs] [${i + 1}/${blocks.length}] image: ${rel}（已上传 ${uploadedImageCount} 张）`);
+      } else {
+        console.log(`[xhs] [${i + 1}/${blocks.length}] 未知块类型 ${block.type}，跳过`);
+      }
+
+      // 图片块上传后编辑器会自动换行，不用手动 Enter；其他块后面还有内容才手动换行
+      if (hasNext && block.type !== "image") {
+        await this.page.keyboard.press("Enter");
+      }
+    }
+    console.log("[xhs] 正文填充完成");
+  }
+
+  /**
+   * 通过点工具栏第 9 个 menu-item 触发系统文件选择框上传图片，
+   * 然后等 editor 内 div[data-imgs] 数量达到 expectedCount。
+   */
+  private async uploadImageViaMenu(relPath: string, expectedCount: number): Promise<void> {
+    const abs = resolve(process.cwd(), relPath);
+
+    // 先监听 filechooser，再点按钮
+    const [fileChooser] = await Promise.all([
+      this.page.waitForEvent("filechooser", { timeout: 10_000 }),
+      this.page
+        .locator(".edit-page .header .mid button.menu-item")
+        .nth(8)
+        .click(),
+    ]);
+    await fileChooser.setFiles(abs);
+    console.log(`[xhs] 已通过文件选择框上传: ${relPath}`);
+
+    // 等编辑器里 div[data-imgs] 数量达到 expectedCount（最长 30s，每 500ms 轮询一次）
+    const deadline = Date.now() + 30_000;
+    while (Date.now() < deadline) {
+      const n = await this.page.locator(".rich-editor-content div[data-imgs]").count();
+      if (n >= expectedCount) {
+        console.log(`[xhs] 图片已渲染：editor 内 div[data-imgs]=${n}`);
+        return;
+      }
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    throw new Error(
+      `等待图片上传超时：期望 editor 内 div[data-imgs] >= ${expectedCount}，但 30s 内未达到`,
+    );
+  }
+
+  /**
+   * 正文填完后：点"一键排版" → 点"下一步" → 若有 tags 则在 tags 输入框里填话题。
+   * @param tags 形如 ["#话题1#", "#话题2#"]，空格拼接成 "#话题1# #话题2#"；空数组则跳过输入
+   */
+  async finishAndAddTags(tags: string[]): Promise<void> {
+    // 1. 点"一键排版"
+    const oneKeyBtn = this.page.locator('button:has-text("一键排版")').first();
+    await oneKeyBtn.waitFor({ state: "visible", timeout: 15_000 });
+    await oneKeyBtn.click();
+    console.log("[xhs] 已点击 一键排版");
+    await new Promise((r) => setTimeout(r, 1000));
+
+    // 2. 等"下一步"按钮出现并点击
+    const nextBtn = this.page.locator('button:has-text("下一步")').first();
+    await nextBtn.waitFor({ state: "visible", timeout: 15_000 });
+    await nextBtn.click();
+    console.log("[xhs] 已点击 下一步");
+
+    // 3. 有 tags 才填；没有则跳过
+    if (!tags || tags.length === 0) {
+      console.log("[xhs] 无 tags，跳过话题输入");
+      return;
+    }
+
+    // 等 tags 输入框（.tiptap-container 下的 div[contenteditable=true]）出现，聚焦后输入
+    const tagEditor = this.page
+      .locator(".tiptap-container div[contenteditable='true']")
+      .first();
+    await tagEditor.waitFor({ state: "visible", timeout: 0 });
+    await tagEditor.focus();
+    // 小红书 tags 格式：左 # 开头、结尾不带 #；article.json 里是 "#话题#"，去掉结尾 #
+    const tagsText = tags.map((t) => t.replace(/#\s*$/, "")).join(" ");
+    await this.page.keyboard.insertText(tagsText);
+    console.log(`[xhs] 已输入 tags: ${tagsText}`);
+  }
+
+  /**
+   * 发布前最后两步：
+   * 1. 点"选择合集" → 在 popover 里点当前合集名；
+   * 2. 点 .custom-switch-switch 勾选原创；若弹确认 modal，先勾 checkbox-simulator，再点"声明原创"。
+   */
+  async selectCollectionAndOriginal(collectionName: string): Promise<void> {
+    // 1. 点"选择合集"
+    const selectBtn = this.page
+      .locator('.collection-plugin-button:has-text("选择合集")')
+      .first();
+    await selectBtn.waitFor({ state: "visible", timeout: 15_000 });
+    await selectBtn.click();
+    console.log("[xhs] 已点击 选择合集");
+
+    // 在 popover 里点合集名
+    const collectionItem = this.page
+      .locator(`.collection-plugin-popover-content .item:has-text("${collectionName}")`)
+      .first();
+    await collectionItem.waitFor({ state: "visible", timeout: 10_000 });
+    await collectionItem.click();
+    console.log(`[xhs] 已选择合集: ${collectionName}`);
+
+    // 2. 点原创开关
+    const origSwitch = this.page.locator(".custom-switch-switch").first();
+    await origSwitch.waitFor({ state: "visible", timeout: 10_000 });
+    await origSwitch.click();
+    console.log("[xhs] 已点击原创声明开关");
+
+    // 若弹确认 modal：先勾 checkbox-simulator，再点"声明原创"按钮
+    const modal = this.page.locator("div.d-modal").first();
+    try {
+      await modal.waitFor({ state: "visible", timeout: 3_000 });
+      const checkbox = modal.locator(".d-checkbox-simulator").first();
+      await checkbox.waitFor({ state: "visible", timeout: 3_000 });
+      await checkbox.click();
+      console.log("[xhs] 已勾选原创确认弹窗的 checkbox");
+
+      const confirmBtn = modal
+        .locator('button:not(.disabled):has-text("声明原创")')
+        .first();
+      await confirmBtn.waitFor({ state: "visible", timeout: 5_000 });
+      await confirmBtn.click();
+      console.log('[xhs] 已点击"声明原创"确认按钮');
+
+      // 等 modal 关闭
+      await modal.waitFor({ state: "hidden", timeout: 10_000 });
+    } catch {
+      console.log("[xhs] 未弹出原创确认 modal，跳过");
+    }
+  }
+
+  /** 点"发布"按钮，等"发布成功"提示出现 */
+  async clickPublish(): Promise<void> {
+    const btn = this.page.locator('button:has-text("发布")').first();
+    await btn.waitFor({ state: "visible", timeout: 15_000 });
+    await btn.click();
+    console.log("[xhs] 已点击 发布");
+
+    await this.page
+      .locator("text=发布成功")
+      .first()
+      .waitFor({ state: "visible", timeout: 60_000 });
+    console.log("[xhs] ✓ 发布成功");
+  }
 }

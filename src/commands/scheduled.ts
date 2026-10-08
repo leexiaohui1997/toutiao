@@ -153,18 +153,27 @@ export function registerScheduledCommands(library: Command): void {
       console.log(`本次将发布 ${tasks.length} 篇`);
       const markDone = db.prepare("UPDATE scheduled_posts SET status='done', publish_at=? WHERE id=?");
       for (const t of tasks) {
-        console.log(`\n→ 发布: ${t.article_path}`);
+        const channel: string = t.channel || "toutiao";
+        console.log(`\n→ [${channel}] 发布: ${t.article_path}`);
         try {
-          execSync(`pnpm dev edit --file "${t.article_path}" --publish --headless`, { stdio: "inherit" });
-          markDone.run(now, t.id);
-          // 写回 article.json 的 publish 字段
-          const artPath = t.article_path;
-          const art = JSON.parse(readFileSync(artPath, "utf-8"));
-          art.publish = true;
-          writeFileSync(artPath, JSON.stringify(art, null, 2));
-          console.log(`✓ 完成`);
+          if (channel === "xhs") {
+            // 小红书任务：直接跑 xhs publish（脚本自己会写回 xhsPublish=true，已发过则跳过）
+            execSync(`pnpm dev xhs publish -f "${t.article_path}" --headless`, { stdio: "inherit" });
+            markDone.run(now, t.id);
+            console.log(`✓ 小红书完成`);
+          } else {
+            // 头条任务
+            execSync(`pnpm dev edit --file "${t.article_path}" --publish --headless`, { stdio: "inherit" });
+            markDone.run(now, t.id);
+            // 写回 article.json 的 publish 字段
+            const artPath = t.article_path;
+            const art = JSON.parse(readFileSync(artPath, "utf-8"));
+            art.publish = true;
+            writeFileSync(artPath, JSON.stringify(art, null, 2));
+            console.log(`✓ 头条完成`);
+          }
         } catch (e) {
-          console.error(`✗ 失败: ${(e as Error).message}`);
+          console.error(`✗ [${channel}] 失败: ${(e as Error).message}`);
         }
       }
 

@@ -1,5 +1,6 @@
 import type { Command } from "commander";
 import { registerXhsCreateCollectionCommand } from "./create-collection.js";
+import { registerXhsPublishCommand } from "./publish.js";
 
 /**
  * `xhs` 命令组：小红书网页自动化。
@@ -10,4 +11,5 @@ export function registerXhsCommand(program: Command): void {
     .description("小红书网页自动化");
 
   registerXhsCreateCollectionCommand(xhs);
+  registerXhsPublishCommand(xhs);
 }

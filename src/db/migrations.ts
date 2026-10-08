@@ -139,4 +139,32 @@ export const migrations: Migration[] = [
       `);
     },
   },
+
+  {
+    version: 7,
+    name: "scheduled-posts-channel",
+    up: (db) => {
+      // 1) 加 channel 列（默认 toutiao）
+      db.exec(`ALTER TABLE scheduled_posts ADD COLUMN channel TEXT NOT NULL DEFAULT 'toutiao'`);
+      // 2) 重建表：把 UNIQUE(article_path) 改成 UNIQUE(article_path, channel)，
+      //    这样同一条文章可以同时排"头条任务"和"72小时后小红书任务"两条
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS scheduled_posts_new (
+          id           INTEGER PRIMARY KEY AUTOINCREMENT,
+          article_path TEXT NOT NULL,
+          publish_at   TEXT NOT NULL,
+          status       TEXT NOT NULL DEFAULT 'pending',
+          channel      TEXT NOT NULL DEFAULT 'toutiao',
+          created_at   TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+          UNIQUE(article_path, channel)
+        );
+        INSERT OR IGNORE INTO scheduled_posts_new (id, article_path, publish_at, status, channel, created_at)
+          SELECT id, article_path, publish_at, status, channel, created_at FROM scheduled_posts;
+        DROP TABLE scheduled_posts;
+        ALTER TABLE scheduled_posts_new RENAME TO scheduled_posts;
+        CREATE INDEX IF NOT EXISTS idx_sched_time ON scheduled_posts(publish_at);
+        CREATE INDEX IF NOT EXISTS idx_sched_status ON scheduled_posts(status);
+      `);
+    },
+  },
 ];

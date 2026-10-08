@@ -44,13 +44,20 @@ export function registerEditCommand(program: Command): void {
       // 1. 读 JSON
       const jsonPath = resolve(process.cwd(), opts.file);
       let data: ArticleJson;
+      let parsed: any;
       try {
         const raw = await readFile(jsonPath, "utf-8");
-        const parsed = JSON.parse(raw);
+        parsed = JSON.parse(raw);
         data = Array.isArray(parsed) ? { content: parsed } : parsed;
       } catch (err) {
         console.error(`读取/解析 JSON 失败: ${(err as Error).message}`);
         process.exit(1);
+      }
+
+      // 已发布过则跳过（头条）
+      if (parsed.publish === true) {
+        console.log("✗ article.publish 已为 true（头条已发布过），跳过");
+        process.exit(0);
       }
       if (!Array.isArray(data.content) || data.content.length === 0) {
         console.error('JSON 格式错误：{ "content": [{type, content}, ...] }');
