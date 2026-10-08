@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { Command } from "commander";
 import { launchPersistentContext } from "../browser.js";
@@ -8,16 +8,11 @@ import { compressImage } from "./compress.js";
 
 /**
  * `create-collection` 命令：从 overview.json 创建合集。
- *
- * JSON 格式（overview.json 顶层字段）：
- * {
- *   "collectionName": "合集名",
- *   "cover": "docs/xxx/cover.png"  // 合集封面本地路径，相对项目根
- * }
  */
 interface OverviewJson {
   collectionName: string;
   cover?: string;
+  created?: boolean;
 }
 
 export function registerCreateCollectionCommand(program: Command): void {
@@ -41,6 +36,13 @@ export function registerCreateCollectionCommand(program: Command): void {
         console.error("JSON 需包含 collectionName 和 cover 字段");
         process.exit(1);
       }
+
+      // 已创建过则跳过
+      if (data.created === true) {
+        console.log("✗ overview.created 已为 true（头条合集已创建），跳过");
+        process.exit(0);
+      }
+
       console.log(`创建合集：${data.collectionName}`);
 
       // 上传前先压缩封面图
@@ -66,6 +68,10 @@ export function registerCreateCollectionCommand(program: Command): void {
       try {
         await createCollection(page, data.collectionName, data.cover);
         console.log("✓ 完成");
+        // 回填 created = true
+        data.created = true;
+        await writeFile(jsonPath, JSON.stringify(data, null, 2) + "\n", "utf-8");
+        console.log("✓ 已回填 overview.created = true");
       } catch (err) {
         console.error("创建合集失败:", (err as Error).message);
         if (opts.headless) {
