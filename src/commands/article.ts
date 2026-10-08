@@ -15,6 +15,8 @@ interface ArticleJson {
   bookTitle: string;
   cover: string;
   coverPrompt?: string;
+  bilibiliCover?: string;
+  bilibiliCoverPrompt?: string;
   content: ArticleBlock[];
   [key: string]: any;
 }
@@ -64,6 +66,16 @@ export function registerArticleCommand(program: Command): void {
         });
       }
 
+      // B 站封面（16:9）：若存在 bilibiliCoverPrompt 且文件未生成，以本篇默认封面为参考图再出一张
+      const biliCoverOut = join(dirPrefix, "bilibili-cover.png");
+      if (article.bilibiliCoverPrompt && !existsSync(resolve(process.cwd(), biliCoverOut))) {
+        tasks.push({
+          prompt: article.bilibiliCoverPrompt,
+          output: biliCoverOut,
+          ref: coverOut, // 用刚生成的默认封面作为参考图（任务按顺序跑，cover.png 此时已落盘）
+        });
+      }
+
       // 插图：content 指向的文件不存在则生成，提示词从 block.prompt 读
       let imgNo = 1;
       for (const block of article.content) {
@@ -93,8 +105,11 @@ export function registerArticleCommand(program: Command): void {
         sessionId: opts.session || overview[sidField],
       });
 
-      // 回写 article.json：cover / image block.content 写成路径（coverPrompt / block.prompt 保留）
+      // 回写 article.json：cover / bilibiliCover / image block.content 写成路径（prompt 字段保留）
       article.cover = coverOut;
+      if (article.bilibiliCoverPrompt) {
+        article.bilibiliCover = biliCoverOut;
+      }
       imgNo = 1;
       for (const block of article.content) {
         if (block.type !== "image") continue;

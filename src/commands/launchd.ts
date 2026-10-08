@@ -16,10 +16,19 @@ const isMac = process.platform === "darwin";
 function ensureWindowsScript(): void {
   mkdirSync(join(process.cwd(), "scripts/windows"), { recursive: true });
   const projectRoot = process.cwd();
-  const logOut = join(projectRoot, "logs/publish.log");
+  const logsDir = join(projectRoot, "logs");
+  // PowerShell 里按天命名日志 + 自动删 7 天前的
   const script = `# 由 publish-start 自动生成，每5分钟跑一次
 Set-Location "${projectRoot}"
-pnpm dev library publish *>> "${logOut}"
+$logsDir = "${logsDir}"
+New-Item -ItemType Directory -Force -Path $logsDir | Out-Null
+# 删 7 天前的日志
+Get-ChildItem -Path $logsDir -Filter "publish-*.log" -File | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-7) } | Remove-Item -Force
+# 按天命名日志
+$today = Get-Date -Format "yyyyMMdd"
+$log = Join-Path $logsDir "publish-$today.log"
+"=== $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') ===" | Out-File -FilePath $log -Append -Encoding utf8
+pnpm dev library publish *>> $log
 exit $LASTEXITCODE
 `;
   writeFileSync(WIN_PS1_SRC, script, "utf-8");

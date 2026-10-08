@@ -161,6 +161,11 @@ export function registerScheduledCommands(library: Command): void {
             execSync(`pnpm dev xhs publish -f "${t.article_path}" --headless`, { stdio: "inherit" });
             markDone.run(now, t.id);
             console.log(`✓ 小红书完成`);
+          } else if (channel === "bilibili") {
+            // B 站任务：直接跑 bilibili publish（脚本自己会写回 bilibiliPublish=true，已发过则跳过）
+            execSync(`pnpm dev bilibili publish -f "${t.article_path}" --headless`, { stdio: "inherit" });
+            markDone.run(now, t.id);
+            console.log(`✓ B 站完成`);
           } else {
             // 头条任务
             execSync(`pnpm dev edit --file "${t.article_path}" --publish --headless`, { stdio: "inherit" });

@@ -66,6 +66,7 @@ docs/
   "xhsCover": "",
   "created": false,
   "xhsCreated": false,
+  "bilibiliCollectionId": null,
   "tags": [],
 
   "articlePlan": [
@@ -106,6 +107,7 @@ docs/
   "xhsCover": "docs/{书名}/xhs-cover.png（小红书合集封面生图后回填，相对项目根）",
   "created": false,  // 合集是否已在头条后台创建，4+0 完成后改为 true
   "xhsCreated": false,  // 合集是否已在小红书后台创建，xhs create-collection 完成后改为 true
+  "bilibiliCollectionId": null,  // B 站文集 id（数字）；bilibili create-collection 成功后回填，非 null 即跳过重复创建
   "tags": ["#话题1#", "#话题2#"],  // 7 指令收集后回填（2~3个不同关键词的话题），所有成稿共用此 tags
 
   "articlePlan": [
@@ -138,6 +140,8 @@ docs/
   "publish": false,
   // 小红书发布状态：成稿阶段 false，xhs publish 发布成功后改为 true；已 true 则脚本跳过
   "xhsPublish": false,
+  // B 站发布状态：成稿阶段 false，bilibili publish 发布成功后改为 true；已 true 则脚本跳过
+  "bilibiliPublish": false,
 
   "title": "主标题（H1）",
   "altTitles": ["备选标题1", "备选标题2"],
@@ -145,6 +149,11 @@ docs/
   // 封面：提示词永久存 coverPrompt；生图后 cover 写成图片路径
   "coverPrompt": "封面图提示词（2054x1600）",
   "cover": "docs/{书名}/第N篇/cover.png（生图后回填路径，相对项目根）",
+
+  // B 站封面（16:9 横版）：提示词永久存 bilibiliCoverPrompt；生图后 bilibiliCover 写成路径。
+  // 生图时以本篇默认封面 cover.png 为参考图二次生成。
+  "bilibiliCoverPrompt": "B站封面图提示词（16:9 横版）",
+  "bilibiliCover": "docs/{书名}/第N篇/bilibili-cover.png（生图后回填）",
 
   // 正文块数组——与本仓库 `pnpm dev edit` 命令格式一致
   // type: "title"=正文H1小标题, "text"=正文段落, "image"=插图
@@ -301,23 +310,24 @@ pnpm dev edit --file "docs/{书名}/第N篇/article.json"
 - **"3+6"**：逐篇流水线模式——每篇完成"成稿 → 生图 → 发布"全流程后，再继续下一篇。**若 `docs/{书名}/cover.png`（合集封面）尚不存在，先生成合集封面。** 然后从当前未完成篇章起，逐篇执行：①读对应章节母稿写 article.json（写完必须检查正文字数≥3500字，不足则补写）→②执行 `pnpm dev article -f "docs/{书名}/第N篇/article.json" --engine jimeng` 生图（积分不足切 `--engine yuanbao`）→③脚本自动把图片路径写回 `cover` / image 块 `content`（提示词字段保留）→④执行 `pnpm dev publish-all -f "docs/{书名}/第N篇/article.json"` 自动发布（头条+小红书）→⑤脚本自动把 `publish` / `xhsPublish` 翻为 `true`。一篇完整走完发布流程后，再推进下一篇，全程无需用户中途插话。
 - **"3+m~n"**：与"3"相同，但只处理第 m 到第 n 篇（含两端），而非从当前未完成篇起一路做到尾。范围外的篇章跳过不动。例如"3+2~6"表示只对第2、3、4、5、6篇执行成稿→生图流程。
 - **"3+6+m~n"**：与"3+6"相同，但只处理第 m 到第 n 篇（含两端）。例如"3+6+2~6"表示只对第2~6篇执行成稿→生图→发布全流程，范围外的篇章跳过不动。
-- **"6"**：批量发布本合集中所有未发布的成稿。**前置步骤：先检测合集是否已在两端后台创建并发布——若 overview.json 的 `created` 或 `xhsCreated` 为 `false`，先执行"4+0"（`pnpm dev create-collection-all -f "docs/{书名}/overview.json"`）一次性建好两端合集，确认合集已存在且已发布后再继续。** 然后扫描 `docs/{书名}/` 下所有 `第N篇/article.json`，找出 `publish` 字段为 `false` 的篇，按序号从小到大逐篇执行 `pnpm dev publish-all -f "docs/{书名}/第N篇/article.json"`（自动发头条 + 小红书）；每篇发布成功后脚本自动把该篇 `publish` / `xhsPublish` 翻为 `true`，再推进下一篇。若某篇尚未生图、对应图片文件不存在，先跳过并在结束时报出，不强行发布。
-- **"4+0"（或"创建合集"）**：一次性在**头条**和**小红书**两端后台创建合集。前置条件：overview.json 已回填 `collectionName`、`collectionDesc`（≤100字）、`cover`（头条合集封面已生图）、`xhsCover`（小红书 3:4 封面已生图，可由 cover 裁剪/参考图生成），且 `created` / `xhsCreated` 均为 `false`。执行命令：
+- **"6"**：批量发布本合集中所有未发布的成稿。**前置步骤：先检测合集是否已在三端后台创建——若 overview.json 的 `created` 或 `xhsCreated` 为 `false`、或 `bilibiliCollectionId` 为空，先执行"4+0"（`pnpm dev create-collection-all -f "docs/{书名}/overview.json"`）一次性建好三端合集，确认合集已存在后再继续。** 然后扫描 `docs/{书名}/` 下所有 `第N篇/article.json`，找出 `publish` 字段为 `false` 的篇，按序号从小到大逐篇执行 `pnpm dev publish-all -f "docs/{书名}/第N篇/article.json"`（头条立即发，小红书+B 站 72h 后自动发）；每篇头条发布成功后脚本自动把该篇 `publish` 翻为 `true`，再推进下一篇。若某篇尚未生图、对应图片文件不存在，先跳过并在结束时报出，不强行发布。
+- **"4+0"（或"创建合集"）**：一次性在**头条**、**小红书**、**B 站**三端后台创建合集。前置条件：overview.json 已回填 `collectionName`、`collectionDesc`（≤100字）、`cover`（头条合集封面已生图）、`xhsCover`（小红书 3:4 封面已生图，可由 cover 裁剪/参考图生成），且 `created` / `xhsCreated` 均为 `false`、`bilibiliCollectionId` 为空。执行命令：
   ```bash
   pnpm dev create-collection-all -f "docs/{书名}/overview.json"
   ```
   脚本内部依次执行：
   1. **头条**：`pnpm dev create-collection --file <overview>` —— 查合集列表页 → 已存在且已发布则跳过 / 存在但未发布则等待 / 不存在则打开创建页填名称+封面+点创建 → 跳列表页循环刷新检测"已发布"，成功后自动把 overview.json 的 `created` 改为 `true`；
-  2. **小红书**：`pnpm dev xhs create-collection -f <overview>` —— 登录检测 → 打开发布页 → 检测同名合集是否已存在（存在则直接退出）→ 填合集名 + 填合集简介 + 上传封面（自动确认裁剪）→ 点"创建" → 等"创建成功"提示 → reload，成功后自动把 overview.json 的 `xhsCreated` 改为 `true`。
+  2. **小红书**：`pnpm dev xhs create-collection -f <overview>` —— 登录检测 → 打开发布页 → 检测同名合集是否已存在（存在则直接退出）→ 填合集名 + 填合集简介 + 上传封面（自动确认裁剪）→ 点"创建" → 等"创建成功"提示 → reload，成功后自动把 overview.json 的 `xhsCreated` 改为 `true`；
+  3. **B 站**：`pnpm dev bilibili create-collection -f <overview>` —— 登录检测 → 打开文集管理页 → 检测同名文集是否已存在（存在则进详情页提取 id）→ 不存在则点"创建文集"填标题+简介+上传封面（复用 `xhsCover`）→ 点"确认创建" → 等跳转到 `/opus/management/collection/{id}`，成功后把 `bilibiliCollectionId` 回填为数字 id。
   任一端失败即停下报错，不继续下一端。
-- **"4+序号（1~N）"（或"发布 N"）**：对第 N 篇统一发布到**头条 + 小红书**两端。要求该篇已完成生图、article.json 中图片字段已替换为本地路径。执行命令：
+- **"4+序号（1~N）"（或"发布 N"）**：对第 N 篇统一发布：头条立即发，小红书 + B 站都排期 72h 后自动发。要求该篇已完成生图、article.json 中图片字段已替换为本地路径。执行命令：
   ```bash
   pnpm dev publish-all -f "docs/{书名}/第N篇/article.json"
   ```
   脚本内部依次执行：
   1. **头条**：`pnpm dev edit --file <article> --publish` —— 自动填充并点"预览并发布"→"确认发布"，成功后自动把 `publish` 改为 `true`；头条失败即终止；
-  2. **小红书**：`pnpm dev xhs publish -f <article>` —— 登录检测 → 打开发布页 → 检测合集存在 → 进长文编辑器 → 填标题/正文/插图 → 一键排版 → 下一步 → 填 tags → 选合集 → 勾原创 → 点发布 → 等"发布成功"，成功后自动把 `xhsPublish` 改为 `true`；小红书失败只打日志，不影响头条结果。
-  已 `publish=true` 或 `xhsPublish=true` 的篇对应端会自动跳过。仅当用户明确说"先别发/我自己检查/先预览"时，才改用 `pnpm dev edit --file <article>`（不进小红书、只做头条填充不发）。
+  2. **小红书 + B 站**：不立即发，在 `scheduled_posts` 表各插一条 72h 后的定时任务（channel=`xhs` / `bilibili`），由 `pnpm dev library publish` worker 到点分别自动执行 `xhs publish` / `bilibili publish`，成功后各自把 `xhsPublish` / `bilibiliPublish` 翻为 `true`。
+  已 `publish=true` / `bilibiliPublish=true` / `xhsPublish=true` 的对应端会自动跳过。仅当用户明确说"先别发/我自己检查/先预览"时，才改用 `pnpm dev edit --file <article>`（不发任何端、只做头条填充不发）。
 - **"5+书名"（或"评估《XXX》"）**：对指定书名执行阶段零选书评估。**不创建任何文件**，只在聊天里出判断报告。流程：①联网检索书籍信息（作者/简介/目录/核心观点/案例风格/头条竞争度），信息不足就请用户补材料；②过 10 条硬性否决项；③打 20 分评分卡，每维必须附真实证据；④按 `references/selection-sop.md` 固定模板输出结论（推荐等级/分数/候选标题/风险/下一步建议）。用户说"做"之后再进阶段一。
 - **"51"（批量快速打分）**：用户一次性给多行书名，格式如下：
   ```

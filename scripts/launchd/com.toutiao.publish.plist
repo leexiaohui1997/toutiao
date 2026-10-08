@@ -8,15 +8,10 @@
     <array>
         <string>/bin/bash</string>
         <string>-c</string>
-        <string>echo "=== $(date '+%Y-%m-%d %H:%M:%S') ===" && cd /Users/masterpiano/Desktop/进行中的项目/toutiao && /Users/masterpiano/.nvm/versions/node/v22.19.0/bin/pnpm dev library publish</string>
+        <string>cd /Users/masterpiano/Desktop/进行中的项目/toutiao && mkdir -p logs && find logs -name "publish-*.log" -type f -mtime +7 -delete && LOG=logs/publish-$(date +%Y%m%d).log && echo "=== $(date '+%Y-%m-%d %H:%M:%S') ===" >> $LOG && /Users/masterpiano/.nvm/versions/node/v22.19.0/bin/pnpm dev library publish >> $LOG 2>&1</string>
     </array>
-    <key>StartCalendarInterval</key>
-    <dict>
-        <key>Minute</key>
-        <integer>0</integer>
-        <key>Second</key>
-        <integer>1</integer>
-    </dict>
+    <key>StartInterval</key>
+    <integer>300</integer>
     <key>RunAtLoad</key>
     <false/>
     <key>EnvironmentVariables</key>
@@ -24,9 +19,5 @@
         <key>PATH</key>
         <string>/Users/masterpiano/.nvm/versions/node/v22.19.0/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     </dict>
-    <key>StandardOutPath</key>
-    <string>/Users/masterpiano/Desktop/进行中的项目/toutiao/logs/publish.log</string>
-    <key>StandardErrorPath</key>
-    <string>/Users/masterpiano/Desktop/进行中的项目/toutiao/logs/publish.err.log</string>
 </dict>
 </plist>

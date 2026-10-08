@@ -120,6 +120,7 @@ export function getWorkdirStatus(rec: { id: number; name: string; work_dir: stri
     result.articleCount = ov.articlePlan?.length || 0;
     result.collectionCreated = ov.created === true;
     result.xhsCollectionCreated = ov.xhsCreated === true;
+    result.bilibiliCollectionCreated = !!ov.bilibiliCollectionId;
     result.tagsCollected = ov.tagsCollected === true;
   }
 
@@ -133,20 +134,22 @@ export function getWorkdirStatus(rec: { id: number; name: string; work_dir: stri
       const articlePath = join(articleDir, "article.json");
       const hasArticle = existsSync(articlePath);
       const hasImages = readdirSync(articleDir).some(f => f.startsWith("插图") || f === "cover.png");
-      let published = false; let xhsPublished = false; let title = "";
+      let published = false; let xhsPublished = false; let bilibiliPublished = false; let title = "";
       let wordCount = 0;
       if (hasArticle) {
         const art = JSON.parse(readFileSync(articlePath, "utf-8"));
         published = art.publish === true;
         xhsPublished = art.xhsPublish === true;
+        bilibiliPublished = art.bilibiliPublish === true;
         title = art.title || "";
         wordCount = countWords(art);
       }
-      articles[no] = { title, hasArticle, hasImages, published, xhsPublished, wordCount };
+      articles[no] = { title, hasArticle, hasImages, published, xhsPublished, bilibiliPublished, wordCount };
     }
   }
   result.articles = articles;
   result.publishedCount = Object.values(articles).filter((a: any) => a.published).length;
   result.xhsPublishedCount = Object.values(articles).filter((a: any) => a.xhsPublished).length;
+  result.bilibiliPublishedCount = Object.values(articles).filter((a: any) => a.bilibiliPublished).length;
   return result;
 }
