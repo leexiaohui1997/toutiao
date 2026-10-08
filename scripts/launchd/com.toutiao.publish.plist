@@ -8,7 +8,7 @@
     <array>
         <string>/bin/bash</string>
         <string>-c</string>
-        <string>cd /Users/masterpiano/Desktop/进行中的项目/toutiao && mkdir -p logs && find logs -name "publish-*.log" -type f -mtime +7 -delete && LOG=logs/publish-$(date +%Y%m%d).log && echo "=== $(date '+%Y-%m-%d %H:%M:%S') ===" >> $LOG && /Users/masterpiano/.nvm/versions/node/v22.19.0/bin/pnpm dev library publish >> $LOG 2>&1</string>
+        <string>cd /Users/masterpiano/Desktop/进行中的项目/toutiao &amp;&amp; mkdir -p logs &amp;&amp; find logs -name "publish-*.log" -type f -mtime +7 -delete &amp;&amp; LOG=logs/publish-$(date +%Y%m%d).log &amp;&amp; echo "=== $(date '+%Y-%m-%d %H:%M:%S') ===" &gt;&gt; $LOG &amp;&amp; /Users/masterpiano/.nvm/versions/node/v22.19.0/bin/pnpm dev library publish &gt;&gt; $LOG 2&gt;&amp;1</string>
     </array>
     <key>StartInterval</key>
     <integer>300</integer>
