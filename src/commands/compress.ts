@@ -16,6 +16,8 @@ export async function compressImage(imgPath: string): Promise<void> {
 
   const before = (await stat(abs)).size;
   const tmpPath = abs + ".tmp";
+  // 清理上次运行可能残留的 tmp（沙盒回收站失败时会留下）
+  await unlink(tmpPath).catch(() => undefined);
 
   let pipeline = sharp(abs);
   if (ext === ".png") {
@@ -33,7 +35,7 @@ export async function compressImage(imgPath: string): Promise<void> {
   // 防御：压完反而更大就丢弃压缩结果，保留原文件
   if (after >= before) {
     const { unlink } = await import("node:fs/promises");
-    await unlink(tmpPath);
+    await unlink(tmpPath).catch(() => undefined); // 沙盒回收站可能失败，tmp 残留不影响主流程
     console.log(`  跳过（压缩后未变小）: ${basename(imgPath)} ${(before / 1024).toFixed(0)}KB`);
     return;
   }

@@ -8,3 +8,5 @@ docs/
 data/
 books/
 logs/
+scripts/windows/
+.workbuddy/

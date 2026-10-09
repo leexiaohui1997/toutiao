@@ -72,15 +72,32 @@ export class YuanBao {
     // 输入框操作区容器
     const actions = this.page.locator('div[data-new-input-control="atomic-actions"]').first();
     await actions.waitFor({ state: "visible", timeout: 15000 });
+    // 等按钮区渲染稳定，并关掉可能出现的活动弹窗
+    await this.page.waitForTimeout(2000);
+    await this.page.keyboard.press("Escape").catch(() => undefined);
 
-    // 直接有"AI 生图"按钮就点
-    const directBtn = actions.locator('button[aria-label="AI 生图"]');
+    // 直接有"AI 生图"按钮就点；没有则重查两次（首屏渲染慢时按钮会晚出现）
+    let directBtn = actions.locator('button[aria-label="AI 生图"]');
+    for (let i = 0; i < 3 && (await directBtn.count()) === 0; i++) {
+      await this.page.waitForTimeout(2000);
+      directBtn = actions.locator('button[aria-label="AI 生图"]');
+    }
     if ((await directBtn.count()) > 0) {
       await directBtn.first().click();
       console.log("[yuanbao] 已点击 AI 生图（直接按钮）");
     } else {
-      // 否则先点"工具"按钮，再在菜单里选"AI 生图"
-      await actions.locator('button[aria-label="工具"]').first().click();
+      // 否则先点"工具"按钮，再在菜单里选"AI 生图"（点击失败则刷新重试一次）
+      const toolBtn = actions.locator('button[aria-label="工具"]').first();
+      try {
+        await toolBtn.click({ timeout: 10000 });
+      } catch {
+        console.log("[yuanbao] 工具按钮点击失败，刷新页面重试…");
+        await this.page.reload({ waitUntil: "domcontentloaded", timeout: 30000 });
+        const actions2 = this.page.locator('div[data-new-input-control="atomic-actions"]').first();
+        await actions2.waitFor({ state: "visible", timeout: 15000 });
+        await this.page.waitForTimeout(2000);
+        await actions2.locator('button[aria-label="工具"]').first().click({ timeout: 15000 });
+      }
       console.log("[yuanbao] 已点击工具按钮，展开菜单");
       const menuItem = this.page.locator('button[role="menuitem"][aria-label="AI 生图"]').first();
       try {
