@@ -47,7 +47,8 @@ function htmlToText(html: string): string {
 }
 
 function partNumber(name: string): number {
-  const m = name.match(/part(\d+)\.x?html?$/i);
+  // 兼容 part0049.html 与 part0000_split_000.html 两种命名：取 part 后的卷号
+  const m = name.match(/part(\d+)/i);
   return m ? parseInt(m[1], 10) : -1;
 }
 

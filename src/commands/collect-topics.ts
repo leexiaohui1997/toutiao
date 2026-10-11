@@ -37,16 +37,32 @@ export function registerCollectTopicsCommand(program: Command): void {
         });
         await page.waitForTimeout(3000);
         await page.evaluate(() => {
-          const d = document.querySelector(".ai-assistant-drawer");
-          if (d) (d as HTMLElement).style.display = "none";
-          const m = document.querySelector(".byte-drawer-mask");
-          if (m) (m as HTMLElement).style.display = "none";
+          // 隐藏头条发布页上所有可能拦截点击的弹窗/抽屉/遮罩
+          const selectors = [
+            ".ai-assistant-drawer", ".byte-drawer-mask", ".byte-modal-wrapper",
+            ".byte-modal-mask", ".byte-mask", ".byte-drawer", ".byte-popup",
+            "[class*='byte-modal']", "[class*='byte-drawer']", "[class*='byte-mask']",
+          ];
+          selectors.forEach(s => {
+            document.querySelectorAll(s).forEach(el => (el as HTMLElement).style.display = "none");
+          });
         });
 
-        await page.locator(".ProseMirror").click();
+        // 正文编辑器：优先取带"正文"占位的 ProseMirror，否则取最后一个
+        const bodyEditor = page.locator(
+          ".ProseMirror[data-placeholder*='正文'], .ProseMirror[aria-placeholder*='正文'], .ProseMirror:has-text('请输入正文')"
+        );
+        const target = (await bodyEditor.count()) > 0 ? bodyEditor.first() : page.locator(".ProseMirror").last();
+        // 常规点击聚焦（遮罩已隐藏），确保焦点在正文
+        await target.click({ timeout: 15000 });
+        await page.waitForTimeout(500);
+        await page.evaluate(() => {
+          const p = document.querySelector(".ProseMirror");
+          if (p) (p as HTMLElement).focus();
+        });
         // 必须逐字 type，insertText 不触发 # 的话题监听
-        await page.keyboard.type(`#${opts.keyword}`, { delay: 50 });
-        await page.waitForTimeout(2000);
+        await page.keyboard.type(`#${opts.keyword}`, { delay: 80 });
+        await page.waitForTimeout(6000);
 
         // 每个 .forum-list-item 含话题名(.forum-list-item-text)和讨论数(第二个div)
         const items = await page.evaluate(() => {
