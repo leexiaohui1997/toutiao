@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { resolve, dirname, join } from "node:path";
 import type { Command } from "commander";
 import { launchPersistentContext } from "../../browser.js";
+import { assertPlatformEnabled } from "../../config.js";
 import { Bilibili } from "./bilibili.js";
 
 /**
@@ -16,6 +17,7 @@ export function registerBilibiliPublishCommand(biliCmd: Command): void {
     .option("--headless", "无头模式", false)
     .option("--user-data-dir <dir>", "覆盖持久化用户数据目录")
     .action(async (opts: { file: string; headless: boolean; userDataDir?: string }) => {
+      assertPlatformEnabled("bilibili");
       const articlePath = resolve(process.cwd(), opts.file);
       console.log(`[bilibili publish] file=${articlePath} headless=${opts.headless}`);
 

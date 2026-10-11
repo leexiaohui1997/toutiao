@@ -3,6 +3,7 @@ import { execSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { openLibraryDb } from "../db/index.js";
+import { ENABLE_XHS, ENABLE_BILIBILI } from "../config.js";
 
 /** 延迟发布小时数（头条发完后隔多久再发小红书 / B 站） */
 const DELAY_HOURS = 72;
@@ -55,12 +56,21 @@ export function registerPublishAllCommand(program: Command): void {
         const insert = db.prepare(
           "INSERT OR IGNORE INTO scheduled_posts (article_path, publish_at, channel) VALUES (?, ?, ?)"
         );
-        insert.run(articlePath, fireAtStr, "xhs");
-        insert.run(articlePath, fireAtStr, "bilibili");
-        console.log(`\n===== [2/3] 小红书定时任务已排期 =====`);
-        console.log(`  计划时间: ${fireAtStr}（头条发布后 ${DELAY_HOURS} 小时）`);
-        console.log(`\n===== [3/3] B 站定时任务已排期 =====`);
-        console.log(`  计划时间: ${fireAtStr}（头条发布后 ${DELAY_HOURS} 小时）`);
+        let step = 2;
+        if (ENABLE_XHS) {
+          insert.run(articlePath, fireAtStr, "xhs");
+          console.log(`\n===== [${step++}/3] 小红书定时任务已排期 =====`);
+          console.log(`  计划时间: ${fireAtStr}（头条发布后 ${DELAY_HOURS} 小时）`);
+        } else {
+          console.log(`\n===== [${step++}/3] ✗ 小红书开关已关闭，跳过定时任务创建 =====`);
+        }
+        if (ENABLE_BILIBILI) {
+          insert.run(articlePath, fireAtStr, "bilibili");
+          console.log(`\n===== [${step++}/3] B 站定时任务已排期 =====`);
+          console.log(`  计划时间: ${fireAtStr}（头条发布后 ${DELAY_HOURS} 小时）`);
+        } else {
+          console.log(`\n===== [${step++}/3] ✗ B 站开关已关闭，跳过定时任务创建 =====`);
+        }
         console.log(`  到点由 \`pnpm dev library publish\` worker 自动执行对应 publish 命令。`);
       } finally {
         db.close();

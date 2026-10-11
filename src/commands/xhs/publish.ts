@@ -2,6 +2,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { resolve, dirname, join } from "node:path";
 import type { Command } from "commander";
 import { launchPersistentContext } from "../../browser.js";
+import { assertPlatformEnabled } from "../../config.js";
 import { Xhs, ImageGeneratingError } from "./xhs.js";
 
 const XHS_PUBLISH_PAGE =
@@ -21,6 +22,7 @@ export function registerXhsPublishCommand(xhsCmd: Command): void {
     .option("--headless", "无头模式", false)
     .option("--user-data-dir <dir>", "覆盖持久化用户数据目录")
     .action(async (opts: { file: string; headless: boolean; userDataDir?: string }) => {
+      assertPlatformEnabled("xhs");
       const articlePath = resolve(process.cwd(), opts.file);
       console.log(`[xhs publish] file=${articlePath} headless=${opts.headless}`);
 

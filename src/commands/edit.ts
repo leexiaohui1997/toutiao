@@ -6,6 +6,7 @@ import { launchPersistentContext } from "../browser.js";
 import { ensureLogin } from "../toutiao/auth.js";
 import { fillArticle, fillTags, openPublishPage, type ArticleBlock } from "../toutiao/editor.js";
 import { fillMainTitle, uploadCover, setLocation, setCollection, publish, CollectionLockedError } from "../toutiao/meta.js";
+import { rescheduleToNextAvailableDay } from "../toutiao/schedule.js";
 import { compressDir } from "./compress.js";
 import { countWords } from "./count-words.js";
 
@@ -135,9 +136,11 @@ export function registerEditCommand(program: Command): void {
           if (await limitModal.isVisible().catch(() => false)) {
             const msg = await page.locator(".byte-modal-content").first().textContent().catch(() => "");
             console.error(`\n✗ ${msg?.trim() || "今日发文已达上限"}`);
-            console.error("✗ 今日不再继续发文，退出。\n");
+            // 今日已达上限：把本篇排到下一个有空位的日期凌晨 4 点
+            const fireAt = rescheduleToNextAvailableDay(jsonPath);
+            console.log(`✓ 已自动补位到 ${fireAt}，本次不发布，退出\n`);
             await context.close().catch(() => undefined);
-            process.exit(2);
+            process.exit(0);
           }
 
           // 3.1 合集（第一步，检测是否 disabled）

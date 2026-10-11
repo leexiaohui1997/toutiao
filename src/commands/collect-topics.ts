@@ -10,7 +10,7 @@ export function registerCollectTopicsCommand(program: Command): void {
     .command("collect-topics")
     .description("输入 #关键词，收集头条正文编辑器推荐的话题列表")
     .requiredOption("-k, --keyword <text>", "关键词，如：通胀")
-    .option("--headless", "无头模式", false)
+    .option("--headless", "无头模式", true)
     .option("--user-data-dir <dir>", "覆盖持久化目录")
     .action(async (opts: { keyword: string; headless: boolean; userDataDir?: string }) => {
       const context = await launchPersistentContext({

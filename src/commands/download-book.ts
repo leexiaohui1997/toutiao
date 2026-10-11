@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { existsSync, mkdirSync } from "node:fs";
-import { resolve, join, basename } from "node:path";
+import { resolve, join } from "node:path";
 import { openLibraryDb } from "../db/index.js";
 import { launchPersistentContext } from "../browser.js";
 
@@ -36,7 +36,7 @@ export function registerDownloadBookCommand(library: Command): void {
 
       // 2. 从夸克下载
       console.log(`本地不存在，从夸克下载: ${rec.name}`);
-      const context = await launchPersistentContext({ headless: true, acceptDownloads: true });
+      const context = await launchPersistentContext({ headless: false, acceptDownloads: true });
       const page = context.pages()[0] ?? (await context.newPage());
 
       try {
@@ -44,30 +44,49 @@ export function registerDownloadBookCommand(library: Command): void {
         await page.reload({ waitUntil: "domcontentloaded" });
         await page.waitForTimeout(3000);
 
-        // 虚拟滚动：边滚边找目标文件名
-        const safeName = rec.name.replace(/[.*+?^${}()|[]\]/g, "\$&");
-        let targetRow = page.locator(`tr.ant-table-row:has(.filename-text[title="${safeName}"])`);
-        let found = await targetRow.count() > 0;
+        // 虚拟滚动：边滚边找目标文件名（与 shared.ts listDir 逻辑一致）
+        const safeName = rec.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        await page.locator("tr.ant-table-row").first().waitFor({ timeout: 5000 });
+        await page.waitForTimeout(800);
+
+        let found = false;
+        const seen = new Set<string>();
         let stagnant = 0;
-        const totalRows = await page.locator("tr.ant-table-row").count();
-        console.log(`当前目录行数: ${totalRows}, 找: ${rec.name}`);
-        while (!found && stagnant < 8) {
+        while (stagnant < 3 && !found) {
+          const names = await page.evaluate(() =>
+            Array.from(document.querySelectorAll("tr.ant-table-row .filename-text")).map(
+              (el) => (el as HTMLElement).title || ""
+            )
+          );
+          if (names.includes(rec.name)) {
+            found = true;
+            break;
+          }
+          const before = seen.size;
+          for (const n of names) seen.add(n);
           await page.evaluate(() => {
             const c = document.querySelector(".ant-table-body") as HTMLElement;
             if (c) c.scrollTop += c.clientHeight * 0.8;
           });
           await page.waitForTimeout(800);
-          targetRow = page.locator(`tr.ant-table-row:has(.filename-text[title="${safeName}"])`);
-          const c = await targetRow.count();
-          console.log(`  滚动 ${stagnant + 1}/8, 匹配行数: ${c}`);
-          if (c > 0) found = true;
-          else stagnant++;
+          // 滚动后再拿一次，看是否有新文件名加入（虚拟滚动 DOM 行数固定，内容替换）
+          const namesAfter = await page.evaluate(() =>
+            Array.from(document.querySelectorAll("tr.ant-table-row .filename-text")).map(
+              (el) => (el as HTMLElement).title || ""
+            )
+          );
+          for (const n of namesAfter) seen.add(n);
+          if (seen.size === before) stagnant++;
+          else stagnant = 0;
+          console.log(`  滚动 ${stagnant}/3, 已见 ${seen.size} 个文件`);
         }
 
         if (!found) {
           console.error(`未找到文件: ${rec.name}`);
           process.exit(1);
         }
+
+        const targetRow = page.locator(`tr.ant-table-row:has(.filename-text[title="${safeName}"])`);
 
         // 先取消全选，再只勾目标行
         const headerCheckbox = page.locator("thead input[type=checkbox]");
