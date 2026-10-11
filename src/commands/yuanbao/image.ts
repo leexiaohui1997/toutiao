@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { launchPersistentContext } from "../../browser.js";
-import { YuanBao } from "./yuanbao.js";
+import { YuanBao, ImageGenerationBlockedError } from "./yuanbao.js";
 import { Wenxin } from "./wenxin.js";
 import { downloadImage } from "../jimeng/image.js";
 
@@ -86,7 +86,21 @@ export async function runYuanbaoImageTasks(
     // 3. 填提示词 → 点发送 → 等出图 → 下载原图
     await yuanbao.fillPrompt(task.prompt);
     await yuanbao.clickSend();
-    const src = await yuanbao.waitForAndGetLatestImage();
+    let src: string;
+    try {
+      src = await yuanbao.waitForAndGetLatestImage();
+    } catch (err) {
+      if (err instanceof ImageGenerationBlockedError) {
+        console.error(`\n✗✗✗ 第 ${i + 1}/${tasks.length} 张图生成失败：提示词违规`);
+        console.error(`  保存位置: ${task.output}`);
+        console.error(`  提示词: ${task.prompt}`);
+        console.error(`  页面提示: ${err.detail}`);
+        console.error(`\n请修改该提示词后重新执行指令，后续 ${tasks.length - i} 张图不再生成。\n`);
+        await context.close().catch(() => undefined);
+        process.exit(1);
+      }
+      throw err;
+    }
     await downloadImage(src, task.output);
 
     // 4. 立刻 fire-and-forget 丢给文心一言去水印，元宝继续下一轮

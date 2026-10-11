@@ -210,8 +210,8 @@ export class YuanBao {
 
   /**
    * 等最新一条 AI 回复里的出图卡片出现，打印其 data-download-url 并返回。
-   * 定位：.agent-chat__list__content 下最后一个 .agent-chat__list__item[data-conv-speaker="ai"]
-   *       → 内部第一个 img.dic-card-item__img--loaded。
+   * 同时并行检测违规失败提示：.hyc-content-loading__text:has-text("图片生成失败")。
+   * 失败时抛 ImageGenerationBlockedError，由外层捕获后打印提示词违规并退出。
    */
   async waitForAndGetLatestImage(timeoutMs = 180_000): Promise<string> {
     const img = this.page
@@ -219,10 +219,33 @@ export class YuanBao {
       .last()
       .locator("img.dic-card-item__img--loaded")
       .first();
-    await img.waitFor({ state: "visible", timeout: timeoutMs });
+    const failHint = this.page
+      .locator('.hyc-content-loading__text:has-text("图片生成失败")')
+      .first();
+
+    // 并行等两个结果，谁先到走谁的分支
+    await Promise.race([
+      img.waitFor({ state: "visible", timeout: timeoutMs }),
+      failHint.waitFor({ state: "visible", timeout: timeoutMs }),
+    ]);
+
+    // 若失败提示先出现，抛错
+    if (await failHint.isVisible().catch(() => false)) {
+      const text = (await failHint.textContent().catch(() => "")) || "";
+      throw new ImageGenerationBlockedError(text.trim());
+    }
+
     const url = await img.getAttribute("data-download-url");
     if (!url) throw new Error("最新出图卡片 data-download-url 为空");
     console.log(`[yuanbao] 出图下载地址: ${url}`);
     return url;
+  }
+}
+
+/** 提示词违规导致生图失败 */
+export class ImageGenerationBlockedError extends Error {
+  constructor(public detail: string) {
+    super(`图片生成失败：${detail}`);
+    this.name = "ImageGenerationBlockedError";
   }
 }

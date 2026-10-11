@@ -21,6 +21,7 @@ import { registerArticleCommand } from "./commands/article.js";
 import { registerCompressCommand } from "./commands/compress.js";
 import { registerCreateCollectionAllCommand } from "./commands/create-collection-all.js";
 import { registerPublishAllCommand } from "./commands/publish-all.js";
+import { registerEpubCommand } from "./commands/epub.js";
 
 const program = new Command();
 
@@ -50,5 +51,6 @@ registerArticleCommand(program);
 registerCompressCommand(program);
 registerCreateCollectionAllCommand(program);
 registerPublishAllCommand(program);
+registerEpubCommand(program);
 
 program.parseAsync(process.argv);

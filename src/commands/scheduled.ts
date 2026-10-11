@@ -5,6 +5,13 @@ import { openLibraryDb } from "../db/index.js";
 import { execSync } from "node:child_process";
 import { getWorkdirStatus } from "./recommendations.js";
 
+/** 本地时间（北京时间）格式化：YYYY-MM-DD HH:mm:ss */
+function nowLocal(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
 /** 定时发布相关子命令 */
 export function registerScheduledCommands(library: Command): void {
   // 为某本书的所有未发布文章创建定时任务
@@ -128,7 +135,7 @@ export function registerScheduledCommands(library: Command): void {
     .option("-n, --count <n>", "本次发布几篇；不传则只发到点的")    .option("--order <order>", "补取顺序：near（最近，默认）/ far（最远）", "near")
     .action((opts: { count: string }) => {
       const db = openLibraryDb();
-      const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+      const now = nowLocal();
 
       // 强制发布所有待发布（调试用，固定 false）
       const FORCE_PUBLISH_ALL = false;
@@ -150,7 +157,7 @@ export function registerScheduledCommands(library: Command): void {
         tasks = tasks.slice(0, want);
       }
 
-      console.log(`本次将发布 ${tasks.length} 篇`);
+      console.log(`本次将发布 ${tasks.length} 篇`, { now });
       const markDone = db.prepare("UPDATE scheduled_posts SET status='done', publish_at=? WHERE id=?");
       for (const t of tasks) {
         const channel: string = t.channel || "toutiao";

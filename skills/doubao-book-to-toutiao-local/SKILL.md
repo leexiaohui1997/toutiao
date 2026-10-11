@@ -203,7 +203,11 @@ docs/
 
 ### 阶段一：全书总览
 
-1. 完整读取书籍（逐页读取，不跳过图表与案例），梳理全书主题、章节数量、每章核心议题与一句话概览。
+1. 完整读取书籍（逐页读取，不跳过图表与案例），梳理全书主题、章节数量、每章核心议题与一句话概览。**读 epub 母稿一律走内置 CLI：`pnpm dev epub`，禁止临时写 Python zipfile 脚本。** 常用流程：
+   - `pnpm dev epub ls books/{id}.epub` — 列全部章节（编号 | 标题 | 字数），用来做 articlePlan；
+   - `pnpm dev epub grep books/{id}.epub "关键词"` — 全文搜主题词定位章节；
+   - `pnpm dev epub read books/{id}.epub --parts A-B` — 读指定范围纯文本母稿；
+   - 子命令详细参数随时 `pnpm dev epub -h` 或 `pnpm dev epub read -h` 查看，不要凭记忆拼参数。
 2. 按 `references/article-template.md` 的写作要点，拟定合集规划：
    - 合集名称备选 5 条（5~6字，不出现书籍概念）；
    - 合集简介（`collectionDesc`，**不超过 100 字**，一句话讲清这个合集给读者解决什么问题、提供什么价值）；
@@ -220,7 +224,7 @@ docs/
 
 ### 阶段二：章节成稿
 
-1. 用户点名章节或按 articlePlan 顺序推进。
+1. 用户点名章节或按 articlePlan 顺序推进。**读母稿用 `pnpm dev epub read books/{id}.epub --parts A-B`**，参数细节 `pnpm dev epub read -h`。
 2. 按 `references/article-template.md` 写正文：
    - 主标题钩子式；
    - 开头钩子 100~150 字；
@@ -420,3 +424,7 @@ pnpm dev edit --file "docs/{书名}/第N篇/article.json"
 - `references/image-prompts.md`：封面/插图提示词规范与模板
 - `references/selection-sop.md`：选书评估 SOP
 - `references/title-selection-guide.md`：合集爆款标题选择指南（"11"步骤 4 使用）（"5+书名"深度评估 + "51"批量打分的完整评判标准：否决项、20 分评分卡、输出模板、反幻觉约束）
+
+## 内置 CLI 工具
+
+- **`pnpm dev epub`**：epub 母稿读取工具（不落盘，流式读 zip 条目到内存）。子命令：`ls`（列章节）、`grep <关键词>`（全文搜索定位）、`read --parts A-B`（读范围纯文本）。所有子命令参数以 `pnpm dev epub -h` / `pnpm dev epub <子命令> -h` 实时输出为准，不要凭记忆拼参数。**禁止临时写 Python zipfile 脚本读 epub**。

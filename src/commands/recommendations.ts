@@ -104,6 +104,27 @@ export function registerRecommendationCommands(library: Command): void {
       console.log(JSON.stringify(getWorkdirStatus(rec), null, 2));
       db.close();
     });
+
+  // 判断当前是否可以开启新任务
+  library
+    .command("can-start-new")
+    .description("查询是否有未完成的推荐书籍，判断能否开启新任务")
+    .action(() => {
+      const db = openLibraryDb();
+      const rows = db.prepare(`
+        SELECT id, name, status, work_dir
+        FROM book_recommendations
+        WHERE status IN ('pending', 'processing') AND work_dir != ''
+        ORDER BY id
+      `).all() as any[];
+      const busy = rows.length > 0;
+      console.log(JSON.stringify({
+        canStart: !busy,
+        busyCount: rows.length,
+        busy: rows,
+      }, null, 2));
+      db.close();
+    });
 }
 
 /** 获取推荐书工作区状态（可复用） */
