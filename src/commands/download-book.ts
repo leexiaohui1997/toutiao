@@ -12,12 +12,16 @@ export function registerDownloadBookCommand(library: Command): void {
     .requiredOption("-i, --id <id>", "推荐书 id（book_recommendations.id）")
     .action(async (opts: { id: string }) => {
       const db = openLibraryDb();
-      const rec = db.prepare(`
+      const rec = db
+        .prepare(
+          `
         SELECT r.id, r.file_id, r.name, r.score, f.url, f.ext
         FROM book_recommendations r
         JOIN files f ON f.id = r.file_id
         WHERE r.id = ?
-      `).get(Number(opts.id)) as any;
+      `,
+        )
+        .get(Number(opts.id)) as any;
 
       if (!rec) {
         console.error(`未找到推荐书 #${opts.id}`);
@@ -29,24 +33,35 @@ export function registerDownloadBookCommand(library: Command): void {
       mkdirSync(booksDir, { recursive: true });
       const localFile = join(booksDir, `${rec.file_id}.${rec.ext}`);
       if (existsSync(localFile)) {
-        console.log(JSON.stringify({ localPath: localFile, name: rec.name }, null, 2));
+        console.log(
+          JSON.stringify({ localPath: localFile, name: rec.name }, null, 2),
+        );
         db.close();
         return;
       }
 
       // 2. 从夸克下载
       console.log(`本地不存在，从夸克下载: ${rec.name}`);
-      const context = await launchPersistentContext({ headless: false, acceptDownloads: true });
+      const context = await launchPersistentContext({
+        headless: true,
+        acceptDownloads: true,
+      });
       const page = context.pages()[0] ?? (await context.newPage());
 
       try {
-        await page.goto(rec.url, { waitUntil: "domcontentloaded", timeout: 30000 });
+        await page.goto(rec.url, {
+          waitUntil: "domcontentloaded",
+          timeout: 30000,
+        });
         await page.reload({ waitUntil: "domcontentloaded" });
         await page.waitForTimeout(3000);
 
         // 虚拟滚动：边滚边找目标文件名（与 shared.ts listDir 逻辑一致）
         const safeName = rec.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        await page.locator("tr.ant-table-row").first().waitFor({ timeout: 5000 });
+        await page
+          .locator("tr.ant-table-row")
+          .first()
+          .waitFor({ timeout: 5000 });
         await page.waitForTimeout(800);
 
         let found = false;
@@ -54,9 +69,9 @@ export function registerDownloadBookCommand(library: Command): void {
         let stagnant = 0;
         while (stagnant < 3 && !found) {
           const names = await page.evaluate(() =>
-            Array.from(document.querySelectorAll("tr.ant-table-row .filename-text")).map(
-              (el) => (el as HTMLElement).title || ""
-            )
+            Array.from(
+              document.querySelectorAll("tr.ant-table-row .filename-text"),
+            ).map((el) => (el as HTMLElement).title || ""),
           );
           if (names.includes(rec.name)) {
             found = true;
@@ -71,9 +86,9 @@ export function registerDownloadBookCommand(library: Command): void {
           await page.waitForTimeout(800);
           // 滚动后再拿一次，看是否有新文件名加入（虚拟滚动 DOM 行数固定，内容替换）
           const namesAfter = await page.evaluate(() =>
-            Array.from(document.querySelectorAll("tr.ant-table-row .filename-text")).map(
-              (el) => (el as HTMLElement).title || ""
-            )
+            Array.from(
+              document.querySelectorAll("tr.ant-table-row .filename-text"),
+            ).map((el) => (el as HTMLElement).title || ""),
           );
           for (const n of namesAfter) seen.add(n);
           if (seen.size === before) stagnant++;
@@ -86,11 +101,16 @@ export function registerDownloadBookCommand(library: Command): void {
           process.exit(1);
         }
 
-        const targetRow = page.locator(`tr.ant-table-row:has(.filename-text[title="${safeName}"])`);
+        const targetRow = page.locator(
+          `tr.ant-table-row:has(.filename-text[title="${safeName}"])`,
+        );
 
         // 先取消全选，再只勾目标行
         const headerCheckbox = page.locator("thead input[type=checkbox]");
-        if (await headerCheckbox.count() > 0 && await headerCheckbox.isChecked()) {
+        if (
+          (await headerCheckbox.count()) > 0 &&
+          (await headerCheckbox.isChecked())
+        ) {
           await headerCheckbox.click();
           await page.waitForTimeout(500);
         }
@@ -107,7 +127,9 @@ export function registerDownloadBookCommand(library: Command): void {
 
         await download.saveAs(localFile);
         console.log(`✓ 下载完成: ${localFile}`);
-        console.log(JSON.stringify({ localPath: localFile, name: rec.name }, null, 2));
+        console.log(
+          JSON.stringify({ localPath: localFile, name: rec.name }, null, 2),
+        );
       } catch (err) {
         console.error("下载失败:", (err as Error).message);
         process.exit(1);
