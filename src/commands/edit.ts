@@ -140,7 +140,9 @@ export function registerEditCommand(program: Command): void {
             const fireAt = rescheduleToNextAvailableDay(jsonPath);
             console.log(`✓ 已自动补位到 ${fireAt}，本次不发布，退出\n`);
             await context.close().catch(() => undefined);
-            process.exit(0);
+            // 退出码 2：头条达上限被排期，本次未真正发布。调用方（publish-all）据此不再把 publish 置 true，
+            // 以免定时 worker 到点发布时因 publish=true 而跳过。
+            process.exit(2);
           }
 
           // 3.1 合集（第一步，检测是否 disabled）

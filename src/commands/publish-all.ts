@@ -32,10 +32,21 @@ export function registerPublishAllCommand(program: Command): void {
       // 1. 头条立即发
       console.log("\n===== [1/3] 立即发布到头条 =====");
       try {
-        execSync(
-          `pnpm dev edit --file "${articlePath}" --publish${opts.headless ? " --headless" : ""}`,
-          { stdio: "inherit" }
-        );
+        try {
+          execSync(
+            `pnpm dev edit --file "${articlePath}" --publish${opts.headless ? " --headless" : ""}`,
+            { stdio: "inherit" }
+          );
+        } catch (e) {
+          // 退出码 2 = 今日发文达上限，edit 已把本篇排期到次日，本次未真正发布。
+          // 此时不要把 publish 置 true，否则定时 worker 到点会因 publish=true 而跳过发布。
+          const status = (e as { status?: number }).status;
+          if (status === 2) {
+            console.log("\n✗ 今日发文达上限，本文已排期，publish 保持 false（到点由发布流程自动发出）");
+            return;
+          }
+          throw e;
+        }
         const art = JSON.parse(readFileSync(articlePath, "utf-8"));
         if (art.publish !== true) {
           art.publish = true;

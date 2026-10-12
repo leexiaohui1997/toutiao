@@ -47,9 +47,22 @@ function htmlToText(html: string): string {
 }
 
 function partNumber(name: string): number {
-  // 兼容 part0049.html 与 part0000_split_000.html 两种命名：取 part 后的卷号
+  // 兼容两种命名：
+  // 1) text/part0000_split_039.html → 取拆分序号 39（同一卷内多个拆分文件，必须按 split 定位）
+  // 2) text/part0049.html            → 取卷号 49
+  const splitM = name.match(/split_(\d+)/i);
+  if (splitM) return parseInt(splitM[1], 10);
   const m = name.match(/part(\d+)/i);
   return m ? parseInt(m[1], 10) : -1;
+}
+
+/** 生成可读的 part 标签：拆分文件显示 split 序号，普通卷显示卷号 */
+function fileLabel(name: string): string {
+  const splitM = name.match(/split_(\d+)/i);
+  if (splitM) return `part0000/split${splitM[1].padStart(3, "0")}`;
+  const m = name.match(/part(\d+)/i);
+  if (m) return `part${m[1].padStart(4, "0")}`;
+  return name;
 }
 
 function firstHeading(html: string): string {
@@ -74,7 +87,7 @@ export function registerEpubCommand(program: Command): void {
         const html = unzipRead(p, f);
         const title = firstHeading(html);
         const text = htmlToText(html);
-        console.log(`part${String(n).padStart(4, "0")} | ${title} | ${text.length}字`);
+        console.log(`${fileLabel(f)} | ${title} | ${text.length}字`);
       }
     });
 
@@ -92,7 +105,7 @@ export function registerEpubCommand(program: Command): void {
           const ctx = text
             .slice(Math.max(0, idx - 40), idx + keyword.length + 40)
             .replace(/\s+/g, " ");
-          console.log(`part${String(partNumber(f)).padStart(4, "0")}: ...${ctx}...`);
+          console.log(`${fileLabel(f)}: ...${ctx}...`);
           hit++;
         }
       }
