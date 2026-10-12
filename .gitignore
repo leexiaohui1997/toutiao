@@ -10,3 +10,5 @@ books/
 logs/
 scripts/windows/
 .workbuddy/
+.session_tmps/
+output/
