@@ -114,7 +114,7 @@ export class Wenxin {
       .last()
       .locator("div.cosd-image-scroll img.cos-image-body")
       .first();
-    await img.waitFor({ state: "attached", timeout: 180_000 });
+    await img.waitFor({ state: "attached", timeout: 45_000 });
     const src = await img.getAttribute("src");
     if (!src) throw new Error("去水印结果图 src 为空");
     console.log(`[wenxin] 去水印完成: ${src}`);

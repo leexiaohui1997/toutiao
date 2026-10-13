@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import type { Page } from "playwright";
+import { dismissAiAssistant } from "./editor.js";
 
 /**
  * 文章元信息填写：主标题、封面、位置、合集。
@@ -75,13 +76,27 @@ export async function setLocation(page: Page, city: string): Promise<void> {
  * 自动发布：点"预览并发布" → 等确认弹窗 → 点"确认发布" → 跳转作品管理页 → 验证标题已出现。
  */
 export async function publish(page: Page, title: string): Promise<void> {
+  // AI 助手抽屉可能在填充过程中再次自动弹出，遮罩会拦截发布按钮点击，先关掉（快速检查）
+  await dismissAiAssistant(page, { wait: false });
+
   // 点右下角"预览并发布"
   await page.locator('button:has-text("预览并发布")').last().click();
-  await page.waitForTimeout(2000);
+  await page.waitForTimeout(2500);
+  await page.screenshot({ path: "publish-debug-1.png" }).catch(() => undefined);
 
-  // 点完"预览并发布"后，右下角按钮直接变为"确认发布"（页面内切换，非弹窗）
+  // 点完"预览并发布"后，可能是页面内按钮切换为"确认发布"，也可能是弹出了预览/确认弹窗。
+  // 先等更长时间并截图，便于定位真实 UI。
   const confirmBtn = page.locator('button:has-text("确认发布")').last();
-  await confirmBtn.waitFor({ state: "visible", timeout: 10000 });
+  try {
+    await confirmBtn.waitFor({ state: "visible", timeout: 25000 });
+  } catch {
+    await page.screenshot({ path: "publish-debug-2.png" }).catch(() => undefined);
+    const html = await page.locator("body").innerText().catch(() => "");
+    console.error("✗ 未找到「确认发布」按钮。当前页面可见文本片段：\n" + html.slice(0, 600));
+    throw new Error('locator.waitFor: 未出现"确认发布"按钮');
+  }
+  // 预览态下抽屉可能复弹遮挡确认按钮，点前再关一次（不等待，快速检查）
+  await dismissAiAssistant(page, { wait: false });
   await confirmBtn.click();
   await page.waitForTimeout(5000);
 

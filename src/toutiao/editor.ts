@@ -18,17 +18,59 @@ export type ArticleBlock =
   | { type: "text"; content: string }
   | { type: "image"; content: string };
 
+/**
+ * 关闭头条「AI 创作助手」抽屉。
+ * 背景：该抽屉在发布页加载后约 1 秒自动弹出，其 byte-drawer-mask 遮罩会拦截
+ * 页面右下角「预览并发布」等按钮的点击。注意：
+ *  - Escape 键无效（实测 2026-10-12）；
+ *  - page.evaluate 设 display:none 会被 React 重渲染冲掉（抽屉自动弹出时）；
+ *  - 可靠方式是点抽屉头部的关闭按钮（svg.close-btn）。
+ */
+export async function dismissAiAssistant(page: Page, opts: { wait?: boolean } = {}): Promise<void> {
+  const { wait = true } = opts;
+  const drawer = page.locator(".ai-assistant-drawer").first();
+  const mask = page.locator(".byte-drawer-mask").first();
+
+  const isOpen = async () =>
+    (await mask.isVisible().catch(() => false)) ||
+    ((await drawer.count()) > 0 && (await drawer.isVisible().catch(() => false)));
+
+  if (wait) {
+    // 等抽屉渲染出来（加载后约 1 秒自动弹出），最多等 6 秒
+    for (let i = 0; i < 12; i++) {
+      if (await isOpen()) break;
+      await page.waitForTimeout(500);
+    }
+  }
+  if (!(await isOpen())) return;
+
+  // 点头部关闭按钮
+  const closeBtn = drawer
+    .locator("svg.close-btn, .byte-drawer-header [class*='close'], .byte-drawer-header [aria-label*='关闭'], .byte-drawer-header [aria-label*='关 闭']")
+    .first();
+  if ((await closeBtn.count()) > 0 && (await closeBtn.isVisible().catch(() => false))) {
+    await closeBtn.click().catch(() => undefined);
+    await page.waitForTimeout(500);
+  }
+
+  // 兜底：仍开着就强制隐藏（防关闭按钮改版）
+  if (await isOpen()) {
+    await page.evaluate(() => {
+      const d = document.querySelector(".ai-assistant-drawer");
+      if (d) (d as HTMLElement).style.display = "none";
+      const m = document.querySelector(".byte-drawer-mask");
+      if (m) (m as HTMLElement).style.display = "none";
+    });
+    await page.waitForTimeout(300);
+  }
+}
+
 /** 打开发布文章页，并关闭遮挡的 AI 助手抽屉 */
 export async function openPublishPage(page: Page): Promise<void> {
   await page.goto(PUBLISH_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
   await page.waitForTimeout(2000);
 
-  await page.evaluate(() => {
-    const d = document.querySelector(".ai-assistant-drawer");
-    if (d) (d as HTMLElement).style.display = "none";
-    const m = document.querySelector(".byte-drawer-mask");
-    if (m) (m as HTMLElement).style.display = "none";
-  });
+  await dismissAiAssistant(page);
 }
 
 /**

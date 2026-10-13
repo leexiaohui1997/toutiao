@@ -69,8 +69,12 @@ export async function runYuanbaoImageTasks(
 
     // 0. 先收掉上一张的去水印结果（若在跑就 await）
     if (pendingWm && pendingOutput) {
-      const noWmSrc = await pendingWm;
-      await downloadImage(noWmSrc, pendingOutput);
+      try {
+        const noWmSrc = await pendingWm;
+        await downloadImage(noWmSrc, pendingOutput);
+      } catch (e) {
+        console.error(`\n[warn] 文心一言去水印失败，保留元宝原图: ${pendingOutput}（${e instanceof Error ? e.message : String(e)}）`);
+      }
       pendingWm = null;
       pendingOutput = null;
     }
@@ -113,8 +117,12 @@ export async function runYuanbaoImageTasks(
 
   // 收掉最后一张的去水印结果
   if (pendingWm && pendingOutput) {
-    const noWmSrc = await pendingWm;
-    await downloadImage(noWmSrc, pendingOutput);
+    try {
+      const noWmSrc = await pendingWm;
+      await downloadImage(noWmSrc, pendingOutput);
+    } catch (e) {
+      console.error(`\n[warn] 文心一言去水印失败，保留元宝原图: ${pendingOutput}（${e instanceof Error ? e.message : String(e)}）`);
+    }
   }
   await context.close();
   return {};

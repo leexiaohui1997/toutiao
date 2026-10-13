@@ -106,8 +106,12 @@ function partNumber(name: string): number {
   // 统一取卷号：
   // 1) text/part0001_split_039.html → 卷号 1
   // 2) text/part0049.html            → 卷号 49
-  const m = name.match(/part(\d+)/i);
-  return m ? parseInt(m[1], 10) : -1;
+  // 3) OEBPS/Text/01_07.xhtml        → 107（NN_NN 命名，数字拼接）
+  let m = name.match(/part(\d+)/i);
+  if (m) return parseInt(m[1], 10);
+  m = name.match(/(\d+)_(\d+)/);
+  if (m) return parseInt(m[1] + m[2], 10);
+  return -1;
 }
 
 /** 生成可读的 part 标签：拆分文件显示 split 序号，普通卷显示卷号 */
