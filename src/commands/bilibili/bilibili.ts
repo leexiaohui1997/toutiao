@@ -319,10 +319,35 @@ export class Bilibili {
     const boxes = formItem.locator("label[role=checkbox]");
     const n = await boxes.count();
     for (let i = 0; i < n; i++) {
-      // 直接在 label 上派发 click 事件，避免 Playwright 点到 label 内的文字/span 子元素
-      await boxes.nth(i).dispatchEvent("click");
+      // 真实点击 label，确保触发 React onChange 状态更新（dispatchEvent 无法驱动 React 合成事件）
+      // force 绕过"原创声明"弹窗对 pointer-events 的拦截（弹窗在勾选瞬间弹出）
+      await boxes.nth(i).click({ force: true });
       console.log(`[bilibili] 已勾选创作声明选项 ${i + 1}/${n}`);
+      // 勾选可能触发"原创声明"确认弹窗，关闭它
+      await this.dismissDeclarationDialog();
     }
+  }
+
+  /** 若勾选创作声明弹出确认框（vui_dialog），点其中非禁用的确认按钮关闭 */
+  private async dismissDeclarationDialog(): Promise<void> {
+    const dialog = this.page.locator(".vui_dialog--root").first();
+    try {
+      await dialog.waitFor({ state: "visible", timeout: 3_000 });
+    } catch {
+      return; // 未弹出，无需处理
+    }
+    // 打印弹窗内按钮文字，便于定位确认键
+    const btns = dialog.locator("button, .vui_button");
+    const m = await btns.count();
+    for (let j = 0; j < m; j++) {
+      const txt = (await btns.nth(j).textContent() ?? "").trim();
+      console.log(`[bilibili] 原创声明弹窗按钮[${j}]: "${txt}"`);
+    }
+    const btn = dialog
+      .locator('.vui_button:not(.vui_button--disabled), button:not(:disabled)')
+      .first();
+    await btn.click({ force: true });
+    console.log("[bilibili] 已确认原创声明弹窗");
   }
 
   /** 填文章标题：textarea[placeholder^=请输入标题] */
