@@ -111,6 +111,8 @@ function partNumber(name: string): number {
   if (m) return parseInt(m[1], 10);
   m = name.match(/(\d+)_(\d+)/);
   if (m) return parseInt(m[1] + m[2], 10);
+  m = name.match(/text(\d+)/i);
+  if (m) return parseInt(m[1], 10);
   return -1;
 }
 
