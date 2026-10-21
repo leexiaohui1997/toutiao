@@ -199,68 +199,149 @@ export async function uploadReferenceImage(page: Page, refRelPath: string): Prom
 }
 
 /**
- * 选择模式：点工具栏第一个 combobox，选中"图片生成"。
- * 应在输入提示词前调用。
+ * 选择创作类型。需兼容两种页面形态：
+ *  - generate 页：工具栏第一个 combobox（Agent 模式），选项含"图片生成/视频生成/音乐生成"；
+ *  -首页：顶部"生成/画布"分段按钮，默认就是生成，无需处理。
+ *
+ * 统一策略：先找"图片生成"选项，找不到就当已在生成模式直接返回。
  */
 export async function openModeSelector(page: Page): Promise<void> {
   const trigger = page.locator(TOOLBAR_COMBOBOX_SELECTOR).nth(0);
-  await trigger.waitFor({ state: "visible", timeout: 10000 });
+  if ((await trigger.count()) === 0) {
+    console.log("✓ 未找到创作类型下拉，默认即为生成模式");
+    return;
+  }
+  // 触发器文案若是"Agent 模式"，说明是 generate 页的创作类型下拉
+  const label = ((await trigger.textContent().catch(() => "")) ?? "").trim();
+  if (!/Agent|创作类型/.test(label)) {
+    console.log(`✓ 当前触发器为"${label}"，默认即为生成模式`);
+    return;
+  }
+
   await trigger.click();
-  console.log("✓ 已点击模式下拉触发器");
+  console.log("✓ 已点击创作类型下拉触发器");
 
   const option = page.locator('li[role="option"]', { hasText: "图片生成" }).first();
-  await option.waitFor({ state: "visible", timeout: 5000 });
+  const found = await option
+    .waitFor({ state: "visible", timeout: 15000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!found) {
+    console.log("✓ 下拉中无'图片生成'选项，保持当前模式");
+    await page.keyboard.press("Escape");
+    return;
+  }
   await option.click();
-  console.log("✓ 已选择模式：图片生成");
-  await page.waitForTimeout(500);
+  console.log("✓ 已选择创作类型：图片生成");
+  await page.waitForTimeout(1500);
 }
 
 /**
- * 选择模型：切到图片生成模式后，工具栏第二个 combobox 会出现，
- * 点开后选中"Seedream 4.7"。需在 {@link openModeSelector} 之后调用。
+ * 选择模型。兼容两种形态：
+ *  - 工具栏有含 Seedream/Dreamina 文案的 combobox（generate 页图片模式）；
+ *  - 没有则读工具栏当前模型文案，确认已是 Seedream 4.7 就跳过。
  */
 export async function selectModel(page: Page): Promise<void> {
-  const trigger = page.locator(TOOLBAR_COMBOBOX_SELECTOR).nth(1);
-  await trigger.waitFor({ state: "visible", timeout: 5000 });
+  await dismissModals(page);
+  const trigger = page
+    .locator(
+      `${TOOLBAR_COMBOBOX_SELECTOR}:has-text("Seedream"), ${TOOLBAR_COMBOBOX_SELECTOR}:has-text("Dreamina")`,
+    )
+    .first();
+
+  if ((await trigger.count()) === 0) {
+    console.log("✓ 未找到模型下拉，跳过模型选择");
+    return;
+  }
+
   await trigger.click();
   console.log("✓ 已点击模型下拉触发器");
 
   const option = page.locator('li[role="option"]', { hasText: "Seedream 4.7" }).first();
-  await option.waitFor({ state: "visible", timeout: 5000 });
+  const found = await option
+    .waitFor({ state: "visible", timeout: 15000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!found) {
+    console.log("✓ 下拉中无Seedream 4.7 选项，保持当前模型");
+    await page.keyboard.press("Escape");
+    return;
+  }
   await option.click();
   console.log("✓ 已选择模型：Seedream 4.7");
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(800);
 }
 
 /**
  * 配置图片参数：展开设置面板 → 画质选"智能" → 分辨率选 2K → 数量选 1。
  * 需在 {@link selectModel} 之后调用。
  */
+/**
+ * 关闭可能残留的模态弹窗（即梦的积分提示/引导层会遮挡工具栏，导致后续点击超时）。
+ * 找不到弹窗时静默返回。
+ */
+export async function dismissModals(page: Page): Promise<void> {
+  const wrappers = page.locator("div.lv-modal-wrapper");
+  const n = await wrappers.count();
+  for (let i = 0; i < n; i++) {
+    const w = wrappers.nth(i);
+    if (!(await w.isVisible().catch(() => false))) continue;
+    // 优先点关闭按钮，其次按 Esc
+    const closeBtn = w.locator('button[class*="close"], .lv-modal-close, [aria-label="close"]');
+    if ((await closeBtn.count()) > 0) {
+      await closeBtn.first().click({ timeout: 3000 }).catch(() => {});
+    } else {
+      await page.keyboard.press("Escape").catch(() => {});
+    }
+    await page.waitForTimeout(400);
+  }
+  // 兜底：仍有可见 modal-wrapper 就直接隐藏，确保不遮挡
+  await page
+    .evaluate(() => {
+      document.querySelectorAll("div.lv-modal-wrapper").forEach((el) => {
+        const s = getComputedStyle(el);
+        if (s.display !== "none" && s.visibility !== "hidden") {
+          (el as HTMLElement).style.display = "none";
+        }
+      });
+    })
+    .catch(() => {});
+}
+
 export async function configureImageSettings(page: Page): Promise<void> {
+  await dismissModals(page);
   // 1. 点设置按钮展开面板
   const settingsBtn = page.locator(SETTINGS_BTN_SELECTOR).nth(0);
-  await settingsBtn.waitFor({ state: "visible", timeout: 5000 });
+  if ((await settingsBtn.count()) === 0) {
+    console.log("✓ 未找到设置按钮，跳过参数配置");
+    return;
+  }
   await settingsBtn.click();
   console.log("✓ 已展开图片设置面板");
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(500);
 
-  // 2. 画质：智能
-  await page.locator("label.lv-radio", { hasText: "智能" }).first().click();
-  console.log("✓ 画质：智能");
+  // 逐项点击，只在目标项存在时才点；缺失则跳过（不同页面形态下参数项会增减）
+  const clickIfPresent = async (locator: ReturnType<Page["locator"]>, label: string) => {
+    if ((await locator.count()) > 0) {
+      await locator.first().click();
+      console.log(`✓ ${label}`);
+    } else {
+      console.log(`· 跳过${label}（当前页面无此项）`);
+    }
+  };
 
-  // 3. 分辨率：2K（label 内含 input[value=2k]）
-  await page
-    .locator("label.lv-radio", { has: page.locator('input[value="2k"]') })
-    .first()
-    .click();
-  console.log("✓ 分辨率：2K");
-
-  // 4. 数量：1（label 内含 input[value=1]）
-  await page
-    .locator("label.lv-radio", { has: page.locator('input[value="1"]') })
-    .first()
-    .click();
-  console.log("✓ 数量：1");
+  // 画质：智能（input.value 为空字符串的那一项）
+  await clickIfPresent(page.locator("label.lv-radio").filter({ hasText: /^智能/ }), "画质：智能");
+  // 分辨率：2K（label 内含 input[value=2k]）
+  await clickIfPresent(
+    page.locator("label.lv-radio", { has: page.locator('input[value="2k"]') }),
+    "分辨率：2K",
+  );
+  // 数量：1（label 内含 input[value=1]）
+  await clickIfPresent(
+    page.locator("label.lv-radio", { has: page.locator('input[value="1"]') }),
+    "数量：1",
+  );
 
   await page.waitForTimeout(300);
 }
@@ -314,8 +395,14 @@ export async function runJimengImageTasks(
   for (let i = 0; i < tasks.length; i++) {
     console.log(`\n[${i + 1}/${tasks.length}] output=${tasks[i].output}`);
 
+    // 模态框可能在页面加载早期就弹出，先无条件清理一次
+    await page.waitForTimeout(1500);
+    await dismissModals(page);
+
     // 等输入框可见（首次是 goto 后，后续是 reload 后），再聚焦
     await page.locator(PROMPT_EDITOR_SELECTOR).first().waitFor({ state: "visible", timeout: 30000 });
+    // 页面加载后可能弹出积分提示/引导模态框，再清一次
+    await dismissModals(page);
     await page.locator(PROMPT_EDITOR_SELECTOR).first().focus();
     await page.waitForTimeout(300);
 

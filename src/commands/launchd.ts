@@ -4,8 +4,14 @@ import { join, resolve } from "node:path";
 import { mkdirSync, writeFileSync } from "node:fs";
 import os from "node:os";
 
-const PLIST_SRC = join(process.cwd(), "scripts/launchd/com.toutiao.publish.plist");
-const PLIST_DST = join(os.homedir(), "Library/LaunchAgents/com.toutiao.publish.plist");
+const PLIST_SRC = join(
+  process.cwd(),
+  "scripts/launchd/com.toutiao.publish.plist",
+);
+const PLIST_DST = join(
+  os.homedir(),
+  "Library/LaunchAgents/com.toutiao.publish.plist",
+);
 const WIN_TASK_NAME = "ToutiaoPublish";
 const WIN_PS1_SRC = join(process.cwd(), "scripts/windows/publish-task.ps1");
 
@@ -31,7 +37,9 @@ export function registerLaunchdCommands(program: Command): void {
   // 开启定时发布
   program
     .command("publish-start")
-    .description("开启定时发布（macOS: launchd 每5分钟；Windows: 任务计划程序每5分钟）")
+    .description(
+      "开启定时发布（macOS: launchd 每5分钟；Windows: 任务计划程序每5分钟）",
+    )
     .action(() => {
       if (isMac) {
         // 阻止系统睡眠（合盖也能跑）
@@ -51,19 +59,27 @@ export function registerLaunchdCommands(program: Command): void {
       } else if (isWin) {
         ensureWindowsScript();
         // 先删旧任务（忽略错误）
-        try { execSync(`schtasks /Delete /TN "${WIN_TASK_NAME}" /F`, { stdio: "ignore" }); } catch {}
+        try {
+          execSync(`schtasks /Delete /TN "${WIN_TASK_NAME}" /F`, {
+            stdio: "ignore",
+          });
+        } catch {}
         // 新建任务：每 5 分钟跑一次 PowerShell 脚本（绕过执行策略）
         execSync(
-          `schtasks /Create /TN "${WIN_TASK_NAME}" /TR "\\"powershell.exe\\" -NoProfile -ExecutionPolicy Bypass -File \\"${WIN_PS1_SRC}\\"" /SC MINUTE /MO 5 /F`,
-          { stdio: "inherit" }
+          `schtasks /Create /TN "${WIN_TASK_NAME}" /TR "\\"powershell.exe\\" -NoProfile -ExecutionPolicy Bypass -File \\"${WIN_PS1_SRC}\\"" /SC HOURLY /F`,
+          { stdio: "inherit" },
         );
-        console.log("✓ 定时发布已开启（Windows 任务计划程序 + PowerShell），每5分钟检查一次");
+        console.log(
+          "✓ 定时发布已开启（Windows 任务计划程序 + PowerShell），每5分钟检查一次",
+        );
         console.log(`  任务名: ${WIN_TASK_NAME}`);
         console.log(`  脚本: ${WIN_PS1_SRC}`);
         console.log(`  日志: logs/publish.log`);
         console.log(`  查看: Get-Content logs\\publish.log -Wait -Tail 50`);
       } else {
-        console.error(`✗ 暂不支持的平台: ${process.platform}（仅支持 macOS / Windows）`);
+        console.error(
+          `✗ 暂不支持的平台: ${process.platform}（仅支持 macOS / Windows）`,
+        );
         process.exit(1);
       }
     });
@@ -89,7 +105,9 @@ export function registerLaunchdCommands(program: Command): void {
         }
       } else if (isWin) {
         try {
-          execSync(`schtasks /Delete /TN "${WIN_TASK_NAME}" /F`, { stdio: "inherit" });
+          execSync(`schtasks /Delete /TN "${WIN_TASK_NAME}" /F`, {
+            stdio: "inherit",
+          });
           console.log("✓ 定时发布任务已删除");
         } catch {
           console.log("定时发布本来就没在跑");
