@@ -6,7 +6,9 @@ dist/
 .DS_Store
 docs/
 data/
+data-*/
 books/
+books-*/
 logs/
 scripts/windows/
 .workbuddy/
