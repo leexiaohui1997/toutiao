@@ -98,7 +98,10 @@ function htmlToText(html: string): string {
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'");
-  t = t.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  t = t
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
   return t;
 }
 
@@ -113,6 +116,9 @@ function partNumber(name: string): number {
   if (m) return parseInt(m[1] + m[2], 10);
   m = name.match(/text(\d+)/i);
   if (m) return parseInt(m[1], 10);
+  // 4) OEBPS/text00003.html → 文件名末尾数字作为序号
+  m = name.match(/([a-zA-Z_]+)(\d+)\.(?:x?html)$/i);
+  if (m) return parseInt(m[2], 10);
   return -1;
 }
 
@@ -129,7 +135,10 @@ function fileLabel(name: string): string {
 function firstHeading(html: string): string {
   const m = html.match(/<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>/i);
   if (!m) return "(无标题)";
-  return m[1].replace(/<[^>]+>/g, "").trim().slice(0, 60);
+  return m[1]
+    .replace(/<[^>]+>/g, "")
+    .trim()
+    .slice(0, 60);
 }
 
 export function registerEpubCommand(program: Command): void {
@@ -182,7 +191,10 @@ export function registerEpubCommand(program: Command): void {
       const book = openEpub(p);
       const [aRaw, bRaw] = (opts.parts || "").split("-");
       const start = parseInt(aRaw || "0", 10);
-      const end = bRaw === undefined || Number.isNaN(parseInt(bRaw, 10)) ? start : parseInt(bRaw, 10);
+      const end =
+        bRaw === undefined || Number.isNaN(parseInt(bRaw, 10))
+          ? start
+          : parseInt(bRaw, 10);
       const picked = book.names.filter((f) => {
         const n = partNumber(f);
         return n >= start && n <= end;

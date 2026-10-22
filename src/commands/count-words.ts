@@ -29,7 +29,7 @@ export function registerCountWordsCommand(program: Command): void {
     .action(async (opts: { file: string }) => {
       const p = resolve(process.cwd(), opts.file);
       const raw = await readFile(p, "utf-8");
-      const data = JSON.parse(raw);
+      const data = JSON.parse(raw.replace(/^\uFEFF/, ""));
       const blocks: Block[] = data.content ?? [];
       const total = countWords(data);
       const textCount = blocks.filter(b => b.type === "text").length;
